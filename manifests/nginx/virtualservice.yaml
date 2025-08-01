@@ -1,19 +1,19 @@
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
-  name: argocd-vs
-  namespace: argocd
+  name: nginx-vs
+  namespace: nginx
 spec:
   gateways:
   - public-gateway
   hosts:
-  - argocd.explorewithnk.com
+  - nginx.explorewithnk.com
   http:
   - match:
     - uri:
         prefix: /
     route:
     - destination:
-        host: argocd-server.argocd.svc.cluster.local
+        host: nginx.nginx.svc.cluster.local
         port:
           number: 80
