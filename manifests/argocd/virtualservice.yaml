@@ -5,7 +5,7 @@ metadata:
   namespace: argocd
 spec:
   gateways:
-  - istio-system/public-gateway
+  - istio-ingress/explorewithnk-gateway
   hosts:
   - argocd.explorewithnk.com
   http:
