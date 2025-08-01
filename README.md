@@ -49,6 +49,9 @@ ssh nkuser@your-public-ip
 Install K3s with Traefik disabled:
 
 ```Bash
+curl -sfL https://get.k3s.io | sh -s - --bind-address=230.114.64.5 --disable=traefik
+```
+```bash
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable=traefik" sh -
 ```
 
@@ -140,6 +143,14 @@ You should now see both client and control plane versions.
 4. install istio on node 
 ```bash
 istioctl install --set profile=demo -y
+```
+4. kubectl create namespace default
+```sh
+kubectl label namespace default istio-injection=enabled
+```
+extract the current istio ingress gateway and update it to node port in case on ningle node cluster and add external ip as in [./istio-ingressgateway.yaml](./manifests//istio/istio-ingressgateway.yaml)
+```sh
+kubectl get svc -n istio-system istio-ingressgateway -o yaml > istio-ingressgateway.yaml
 ```
 
 ### Phase 5 (Optional): Install cert-manager if you want to use Let's Encrypt
