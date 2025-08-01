@@ -31,7 +31,7 @@ apiVersion: networking.istio.io/v1
 kind: Gateway
 metadata:
   name: explorewithnk-gateway
-  namespace: istio-ingress # Changed from 'default' to 'istio-ingress'
+  namespace: istio-system # Changed from 'default' to 'istio-ingress'
 spec:
   selector:
     istio: ingressgateway
