@@ -1,28 +1,48 @@
-apiVersion: networking.istio.io/v1beta1
+# apiVersion: networking.istio.io/v1beta1
+# kind: Gateway
+# metadata:
+#   name: public-gateway
+#   namespace: istio-system
+# spec:
+#   selector:
+#     istio: ingressgateway
+#   servers:
+#   - port:
+#       number: 80
+#       name: http
+#       protocol: HTTP
+#     hosts:
+#     - "explorewithnk.com"
+#     - "*.explorewithnk.com"
+#     tls:
+#       httpsRedirect: true
+#   - port:
+#       number: 443
+#       name: https
+#       protocol: HTTPS
+#     hosts:
+#     - "explorewithnk.com"
+#     - "*.explorewithnk.com"
+#     tls:
+#       mode: SIMPLE
+#       credentialName: explorewithnk-com-tls
+
+apiVersion: networking.istio.io/v1
 kind: Gateway
 metadata:
-  name: public-gateway
-  namespace: istio-system
+  name: explorewithnk-gateway
+  namespace: istio-ingress # Changed from 'default' to 'istio-ingress'
 spec:
   selector:
     istio: ingressgateway
   servers:
   - port:
-      number: 80
-      name: http
-      protocol: HTTP
-    hosts:
-    - "explorewithnk.com"
-    - "*.explorewithnk.com"
-    tls:
-      httpsRedirect: true
-  - port:
       number: 443
       name: https
       protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: explorewithnk-com-tls-secret # Ensure this secret exists in the 'istio-ingress' namespace
     hosts:
     - "explorewithnk.com"
     - "*.explorewithnk.com"
-    tls:
-      mode: SIMPLE
-      credentialName: explorewithnk-com-tls
