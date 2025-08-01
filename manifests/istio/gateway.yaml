@@ -7,19 +7,19 @@ spec:
   selector:
     istio: ingressgateway
   servers:
-  - port: 80
-    name: http
-    protocol: HTTP
+  - port:
+      number: 80
+      name: http
     hosts:
-    - "*." # matches all subdomains
+    - "*.explorewithnk.com"
     - "explorewithnk.com"
     tls:
       httpsRedirect: true
-  - port: 443
-    name: https
-    protocol: HTTPS
+  - port:
+      number: 443
+      name: https
     hosts:
-    - "*."
+    - "*.explorewithnk.com"
     - "explorewithnk.com"
     tls:
       mode: SIMPLE
