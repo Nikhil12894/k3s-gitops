@@ -65,7 +65,7 @@ spec:
     - "explorewithnk.com"
     - "*.explorewithnk.com"
     tls:
-      httpsRedirect: true # Redirects HTTP to HTTPS
+      httpsRedirect: false # Redirects HTTP to HTTPS
   - port:
       number: 443
       name: https
