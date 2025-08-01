@@ -5,7 +5,7 @@ metadata:
   namespace: default
 spec:
   gateways:
-  - public-gateway
+  - istio-system/public-gateway
   hosts:
   - "explorewithnk.com"
   http:

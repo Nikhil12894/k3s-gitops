@@ -2,7 +2,7 @@ apiVersion: networking.istio.io/v1beta1
 kind: Gateway
 metadata:
   name: public-gateway
-  namespace: default
+  namespace: istio-system
 spec:
   selector:
     istio: ingressgateway
@@ -10,19 +10,19 @@ spec:
   - port:
       number: 80
       name: http
-      protocol: HTTP # ✅ Correct location
+      protocol: HTTP
     hosts:
-    - "*.explorewithnk.com"
     - "explorewithnk.com"
+    - "*.explorewithnk.com"
     tls:
       httpsRedirect: true
   - port:
       number: 443
       name: https
-      protocol: HTTPS # ✅ Correct location
+      protocol: HTTPS
     hosts:
-    - "*.explorewithnk.com"
     - "explorewithnk.com"
+    - "*.explorewithnk.com"
     tls:
       mode: SIMPLE
       credentialName: explorewithnk-com-tls

@@ -1,13 +1,13 @@
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: nginx-cert
-  namespace: nginx
-spec:
-  secretName: wildcard-tls
-  issuerRef:
-    name: letsencrypt-prod
-    kind: ClusterIssuer
-  commonName: nginx.explorewithnk.com
-  dnsNames:
-    - nginx.explorewithnk.com
+# apiVersion: cert-manager.io/v1
+# kind: Certificate
+# metadata:
+#   name: nginx-cert
+#   namespace: nginx
+# spec:
+#   secretName: explorewithnk-com-tls
+#   issuerRef:
+#     name: letsencrypt-prod
+#     kind: ClusterIssuer
+#   commonName: nginx.explorewithnk.com
+#   dnsNames:
+#   - nginx.explorewithnk.com
