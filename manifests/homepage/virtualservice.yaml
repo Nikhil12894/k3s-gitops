@@ -5,7 +5,7 @@ metadata:
   namespace: default
 spec:
   gateways:
-  - default/public-gateway
+  - public-gateway
   hosts:
   - "explorewithnk.com"
   http:
