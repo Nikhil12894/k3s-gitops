@@ -205,14 +205,21 @@ helm install kubernetes-replicator mittwald/kubernetes-replicator \
   --namespace kubernetes-replicator \
   --set replicationEnabled.secrets=true
 
-## Phase 8: Install Argo CD
+## Phase 8: Install Argo CD use [values.yaml](./charts/argocd/values.yaml)
 
 ```bash
 kubectl create namespace argocd
+kubectl apply -f manifests/argo/argocd-cert-manager.yaml # this will create custom certificate for ingress for argocd and the use the same secretsName in values.yaml
+helm install argocd argo/argo-cd -f values.yaml --namespace argocd
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 ```
 
+## Phase 9: Install keycloak use [values.yaml](./charts/keycloak/values.yaml)
+```bash
+kubectl create namespace keycloak
+kubectl apply -f manifests/keycloak/keycloak-cert-manager.yaml
+helm install keycloak-app oci://registry-1.docker.io/bitnamicharts/keycloak -f values.yaml -n keycloak
+```
 ---
 
 ## 📁 Folder Structure
@@ -257,7 +264,7 @@ k3s-gitops/
 | Tempo        | `tempo.explorewithnk.com`     |
 | Keycloak     | `auth.explorewithnk.com`      |
 | Vault        | `vault.explorewithnk.com`     |
-| Your App     | `app.explorewithnk.com`       |
+| homepage     | `explorewithnk.com`       |
 
 > 🔐 All services are exposed via Istio Ingress Gateway with TLS using Let's Encrypt.
 
