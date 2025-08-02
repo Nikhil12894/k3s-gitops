@@ -47,32 +47,32 @@
 #     - "explorewithnk.com"
 #     - "*.explorewithnk.com"
 
-apiVersion: networking.istio.io/v1alpha3
-kind: Gateway
-metadata:
-  name: explorewithnk-gateway
-  annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod" # References the ClusterIssuer
-spec:
-  selector:
-    istio: ingressgateway
-  servers:
-  - port:
-      number: 80
-      name: http
-      protocol: HTTP
-    hosts:
-    - "explorewithnk.com"
-    - "*.explorewithnk.com"
-    tls:
-      httpsRedirect: false # Redirects HTTP to HTTPS
-  - port:
-      number: 443
-      name: https
-      protocol: HTTPS
-    hosts:
-    - "explorewithnk.com"
-    - "*.explorewithnk.com"
-    tls:
-      mode: SIMPLE
-      credentialName: explorewithnk-com-tls # Secret that will be created
+# apiVersion: networking.istio.io/v1alpha3
+# kind: Gateway
+# metadata:
+#   name: explorewithnk-gateway
+#   annotations:
+#     cert-manager.io/cluster-issuer: "letsencrypt-prod" # References the ClusterIssuer
+# spec:
+#   selector:
+#     istio: ingressgateway
+#   servers:
+#   - port:
+#       number: 80
+#       name: http
+#       protocol: HTTP
+#     hosts:
+#     - "explorewithnk.com"
+#     - "*.explorewithnk.com"
+#     tls:
+#       httpsRedirect: false # Redirects HTTP to HTTPS
+#   - port:
+#       number: 443
+#       name: https
+#       protocol: HTTPS
+#     hosts:
+#     - "explorewithnk.com"
+#     - "*.explorewithnk.com"
+#     tls:
+#       mode: SIMPLE
+#       credentialName: explorewithnk-com-tls # Secret that will be created

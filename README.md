@@ -54,6 +54,21 @@ curl -sfL https://get.k3s.io | sh -s - --bind-address=230.114.64.5 --disable=tra
 ```bash
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable=traefik" sh -
 ```
+```bash
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable=traefik --tls-san explorewithnk.com --tls-san 180.188.231.97 --node-external-ip 180.188.231.97" sh -
+curl -sfL https://get.k3s.io | sudo INSTALL_K3S_EXEC="--disable=traefik --tls-san 180.188.231.97 --tls-san explorewithnk.com --node-external-ip 180.188.231.97" sh -
+
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="\
+  --disable=traefik
+  --bind-address 80.188.231.97 \
+  --tls-san 80.188.231.97 \
+  --tls-san explorewithnk.com \
+  --node-external-ip 80.188.231.97" sh -
+```
+Uninstall K3s:
+```bash
+sudo /usr/local/bin/k3s-uninstall.sh
+```
 
 ### Verify k3s
 ```bash
@@ -103,7 +118,10 @@ source ~/.bashrc
 ```bash
 kubectl get nodes
 ```
-
+### copy k3s config to local machine
+```bash
+scp nkuser@180.188.231.97:/home/nkuser/.kube/config ~/.kube/config
+```
 You should see your K3s node **without using `sudo`**.
 
 ## Phase 4: Install Istio with `istioctl` 
