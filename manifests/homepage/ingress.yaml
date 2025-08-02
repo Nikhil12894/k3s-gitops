@@ -1,3 +1,17 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: explorewithnk-root-cert
+  namespace: cert-manager
+spec:
+  secretName: explorewithnk-root-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  commonName: explorewithnk.com
+  dnsNames:
+  - explorewithnk.com
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -11,7 +25,7 @@ spec:
   tls:
   - hosts:
     - explorewithnk.com
-    secretName: explorewithnk-tls
+    secretName: explorewithnk-root-tls
   rules:
   - host: explorewithnk.com
     http:
