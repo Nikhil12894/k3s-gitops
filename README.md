@@ -264,7 +264,7 @@ k3s-gitops/
 | Tempo        | `tempo.explorewithnk.com`     |
 | Keycloak     | `auth.explorewithnk.com`      |
 | Vault        | `vault.explorewithnk.com`     |
-| homepage     | `explorewithnk.com`       |
+| homepage     | [`explorewithnk.com`](https://explorewithnk.com)       |
 
 > 🔐 All services are exposed via Istio Ingress Gateway with TLS using Let's Encrypt.
 
