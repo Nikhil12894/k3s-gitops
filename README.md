@@ -48,16 +48,7 @@ ssh nkuser@your-public-ip
 ## Phase 2: Install and Configure k3s
 Install K3s with Traefik disabled:
 
-```Bash
-curl -sfL https://get.k3s.io | sh -s - --bind-address=230.114.64.5 --disable=traefik
-```
 ```bash
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable=traefik" sh -
-```
-```bash
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable=traefik --tls-san explorewithnk.com --tls-san 180.188.231.97 --node-external-ip 180.188.231.97" sh -
-curl -sfL https://get.k3s.io | sudo INSTALL_K3S_EXEC="--disable=traefik --tls-san 180.188.231.97 --tls-san explorewithnk.com --node-external-ip 180.188.231.97" sh -
-
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="\
   --disable=traefik
   --bind-address 80.188.231.97 \
@@ -65,10 +56,7 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="\
   --tls-san explorewithnk.com \
   --node-external-ip 80.188.231.97" sh -
 ```
-Uninstall K3s:
-```bash
-sudo /usr/local/bin/k3s-uninstall.sh
-```
+
 
 ### Verify k3s
 ```bash
@@ -124,9 +112,18 @@ scp nkuser@180.188.231.97:/home/nkuser/.kube/config ~/.kube/config
 ```
 You should see your K3s node **without using `sudo`**.
 
-## Phase 4: Install Istio with `istioctl` 
+## Phase 4: Install Nginx Ingress Controller
 
+```bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.0/deploy/static/provider/cloud/deploy.yaml
+```
 
+## Phase 5: Install Helm
+```bash
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+```
+
+## Phase 6: Install Istio with `istioctl` 
 
 #### Step-by-Step: Install istioctl
 1. Download Istio
@@ -166,215 +163,53 @@ istioctl install --set profile=demo -y
 ```sh
 kubectl label namespace default istio-injection=enabled
 ```
-extract the current istio ingress gateway and update it to node port in case on ningle node cluster and add external ip as in [./istio-ingressgateway.yaml](./manifests//istio/istio-ingressgateway.yaml)
-```sh
-kubectl get svc -n istio-system istio-ingressgateway -o yaml > istio-ingressgateway.yaml
-```
 
-### Phase 5 (Optional): Install cert-manager if you want to use Let's Encrypt
+### Phase 7: Install cert-manager if you want to use Let's Encrypt
+1. Install cert-manager
 ```bash
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
 ```
-
-### Phase 6 (Optional if phase 5 is installed): Generate a self-signed certificate
-
-
-Here is a step-by-step guide to create a self-signed certificate and the corresponding Kubernetes secret.
-
-#### Step 1: Generate the Self-Signed Certificate and Key
-Use the openssl command to generate a private key (tls.key) and a self-signed certificate (tls.crt). This is a common method for development and testing environments.
-
-Note: Replace explorewithnk.com with your domain name.
-
+2. Verify
 ```bash
-openssl genrsa -out tls.key 2048
-
-
-openssl req -new -x509 -sha256 -key tls.key -out tls.crt -days 3650 \
--subj "/CN=explorewithnk.com" \
--addext "subjectAltName = DNS:explorewithnk.com, DNS:*.explorewithnk.com, DNS:learnwithnk.in, DNS:*.learnwithnk.in"
+kubectl get pods -n cert-manager
 ```
+3. Install Let's Encrypt Issuer `my-cluster-issuer.yaml`
+```yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    email: nknk4343@gmail.com
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-prod-private-key
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
 
-
-
-This command will:
-
-req -x09: Create a new self-signed certificate.
-
--nodes: Skip the passphrase.
-
--days 365: Set the certificate validity to one year.
-
--newkey rsa:2048: Generate a new 2048-bit RSA private key.
-
--keyout tls.key: Save the private key to a file named tls.key.
-
--out tls.crt: Save the certificate to a file named tls.crt.
-
--subj: Set the subject information.
-
-After running this command, you will have two files in your current directory: tls.key and tls.crt.
-
-#### Step 2: Create a TLS Secret for Each Namespace
-Kubernetes secrets are namespaced, meaning a secret in one namespace is not accessible from another. To use the same certificate for applications in different namespaces, you must create a separate secret in each namespace.
-
-If you have an application in the argocd namespace and another in xyz, you would run the kubectl create secret command for each one.
-
-Note: You only need to run Step 1 once to generate the key and certificate files. Then, run the following commands for each namespace.
-
--  For the 'argocd' namespace
-kubectl create secret tls explorewithnk-com-tls-secret --cert=tls.crt --key=tls.key --namespace=argocd
-
--  For the 'xyz' namespace
-kubectl create secret tls explorewithnk-com-tls-secret --cert=tls.crt --key=tls.key --namespace=xyz
-
-This command will:
+```
 ```bash
-kubectl create secret tls explorewithnk-com-tls-secret --cert=tls.crt --key=tls.key --namespace=istio-system
-```
-create secret tls: Tell kubectl to create a secret of type kubernetes.io/tls.
-
-explorewithnk-com-tls-secret: Name the secret exactly as it's referenced in your istio-gateway document.
-
---cert=tls.crt: Point to the certificate file.
-
---key=tls.key: Point to the private key file.
-
---namespace=...: Create the secret in the correct namespace.
-
-Step 3: Verify the Secrets
-Finally, run the get secret command to confirm the secret was created successfully in each namespace.
-
-#### For the 'default' namespace
-kubectl get secret explorewithnk-com-tls-secret -n default
-
-#### For the 'xyz' namespace
-kubectl get secret explorewithnk-com-tls-secret -n xyz
-
-You should now see the secret listed in the output for each namespace.
-
-Once the secrets are successfully created, the Istio Gateway should be able to pick them up and secure your ingress traffic.
-
-
-# Guide to Cross-Namespace Istio Gateway Routing
-This guide provides a step-by-step process for configuring a single Istio Gateway to route traffic to services in multiple, different namespaces.
-
-The Concept
-The core idea is to:
-
-Deploy a single Gateway in a dedicated namespace. This gateway acts as the central entry point for all traffic and holds the TLS secrets.
-
-Deploy VirtualService resources in the application namespaces. Each VirtualService defines the routing rules for its specific service and "attaches" to the centralized Gateway.
-
-This model allows for a clear separation of concerns:
-
-Platform/Infra Team: Manages the shared Gateway and its TLS certificates.
-
-Application Teams: Manage their own VirtualService and Service resources within their respective namespaces.
-
-Step 1: Deploy the Shared Gateway
-First, you need to create a dedicated namespace for your gateway (e.g., istio-ingress). The Gateway resource you provided will be deployed here.
-
-gateway-shared.yaml
-
-### This Gateway will be deployed in the 'istio-ingress' namespace.
-```yaml
-apiVersion: networking.istio.io/v1
-kind: Gateway
-metadata:
-  name: explorewithnk-gateway
-  namespace: istio-ingress # Changed from 'default' to 'istio-ingress'
-spec:
-  selector:
-    istio: ingressgateway
-  servers:
-  - port:
-      number: 443
-      name: https
-      protocol: HTTPS
-    tls:
-      mode: SIMPLE
-      credentialName: explorewithnk-com-tls-secret # Ensure this secret exists in the 'istio-ingress' namespace
-    hosts:
-    - "explorewithnk.com"
-    - "*.explorewithnk.com"
-```
-Apply this file:
-kubectl apply -f gateway-shared.yaml
-
-Note: You must ensure the explorewithnk-com-tls-secret secret also exists in the istio-ingress namespace. If it was in the default namespace, you'll need to copy it over.
-
-Step 2: Deploy the Application and VirtualService
-Next, in your application's namespace (e.g., my-app-namespace), you will deploy your service and a VirtualService that routes traffic to it.
-
-The key is in the VirtualService's gateways field. You must specify the namespace of the gateway you want to use, followed by the gateway's name.
-
-virtualservice-my-app.yaml
-
-### This VirtualService will be deployed in the 'my-app-namespace' namespace.
-```yaml
-apiVersion: networking.istio.io/v1
-kind: VirtualService
-metadata:
-  name: my-app-virtualservice
-  namespace: my-app-namespace # Deploy in the application's namespace
-spec:
-  hosts:
-  - "test.explorewithnk.com" # Example hostname for a service in this namespace
-  gateways:
-  - istio-ingress/explorewithnk-gateway # Correctly reference the shared gateway
-  http:
-  - match:
-    - uri:
-        prefix: "/my-service"
-    route:
-    - destination:
-        host: my-app-service.my-app-namespace.svc.cluster.local # FQDN of your service
-        port:
-          number: 8080 # The port of your application service
-```
-Apply this file:
-kubectl apply -f virtualservice-my-app.yaml
-
-Step 3: Repeat for Other Applications
-You can now repeat Step 2 for any other application in a different namespace. For example, for an application in another-app-namespace, you would create a new VirtualService that also references istio-ingress/explorewithnk-gateway.
-
-Example VirtualService for another app
-
-### This VirtualService would be in the 'another-app-namespace'
-```yaml
-apiVersion: networking.istio.io/v1
-kind: VirtualService
-metadata:
-  name: another-app-virtualservice
-  namespace: another-app-namespace
-spec:
-  hosts:
-  - "another.learnwithnk.com" # A different subdomain
-  gateways:
-  - istio-ingress/explorewithnk-gateway
-  http:
-  - route:
-    - destination:
-        host: another-app-service.another-app-namespace.svc.cluster.local
-        port:
-          number: 80
-```
-
-## Phase 7: Install Istio Gateway
-```bash
-kubectl apply -f manifests/istio/gateway.yaml
+kubectl apply -f manifests/cert-manager/my-cluster-issuer.yaml
 ```
 
 
 
+helm repo add mittwald https://helm.mittwald.de
 
+kubectl create namespace kubernetes-replicator
 
+helm install kubernetes-replicator mittwald/kubernetes-replicator \
+  --namespace kubernetes-replicator \
+  --set replicationEnabled.secrets=true
 
 ## Phase 8: Install Argo CD
 
 ```bash
 kubectl create namespace argocd
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 ```
 
@@ -432,3 +267,17 @@ Bootstrap Argo CD root app:
 kubectl apply -f argo/root-app.yaml
 ```
 Argo CD will auto-sync the rest.
+
+
+
+
+
+
+
+
+---
+###  Uninstall K3s:
+```bash
+sudo /usr/local/bin/k3s-uninstall.sh
+```
+---
