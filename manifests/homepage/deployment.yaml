@@ -49,6 +49,7 @@ spec:
     spec:
       containers:
       - image: docker.io/nikhil12894/vps-landing:v1.0.1
+        imagePullPolicy: Always # Or IfNotPresent, or Never
         name: homepage
         ports:
         - containerPort: 80
