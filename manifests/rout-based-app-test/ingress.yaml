@@ -1,0 +1,61 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: test-rout-app-ingress
+  annotations:
+    # Important: This annotation is specific to the Nginx Ingress Controller.
+    # It tells the controller to rewrite the path before forwarding it to the backend service.
+    # For example, it strips "/app-a" from the URL before sending it to app-a-service.
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx # This specifies that the Nginx Ingress controller should handle this Ingress.
+  tls:
+  - hosts:
+    - explorewithnk.com
+    secretName: explorewithnk-root-tls
+  rules:
+  - host: "explorewithnk.com" # Replace with your actual domain name
+    http:
+      paths:
+      - path: /app-a
+        pathType: Prefix
+        backend:
+          service:
+            name: app-a-service
+            port:
+              number: 80
+      - path: /app-b
+        pathType: Prefix
+        backend:
+          service:
+            name: app-b-service
+            port:
+              number: 80
+
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: homepage
+#   namespace: default
+#   annotations:
+#     kubernetes.io/ingress.class: "nginx"
+#     cert-manager.io/cluster-issuer: "letsencrypt-prod"
+#     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+# spec:
+#   tls:
+#   - hosts:
+#     - explorewithnk.com
+#     secretName: explorewithnk-root-tls
+#   rules:
+#   - host: explorewithnk.com
+#     http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: homepage
+#             port:
+#               number: 80
