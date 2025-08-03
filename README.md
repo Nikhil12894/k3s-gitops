@@ -257,13 +257,6 @@ k3s-gitops/
 
 | App          | Subdomain                     |
 |--------------|-------------------------------|
-| Argo CD      | `argocd.explorewithnk.com`    |
-| Grafana      | `grafana.explorewithnk.com`   |
-| Prometheus   | `prometheus.explorewithnk.com`|
-| Loki         | `loki.explorewithnk.com`      |
-| Tempo        | `tempo.explorewithnk.com`     |
-| Keycloak     | `auth.explorewithnk.com`      |
-| Vault        | `vault.explorewithnk.com`     |
 | homepage     | <a href="https://explorewithnk.com" target="_blank">`explorewithnk.com`</a> |
 
 > 🔐 All services are exposed via Istio Ingress Gateway with TLS using Let's Encrypt.
