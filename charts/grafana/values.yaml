@@ -1,0 +1,52 @@
+# Enable and configure each component
+grafana:
+  enabled: true
+  adminPassword: "password"
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: true
+    ingressClassName: "nginx"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/rewrite-target: /
+    hosts:
+    - grafana.explorewithnk.com
+    tls:
+    - hosts:
+      - grafana.explorewithnk.com
+      secretName: explorewithnk-grafana-tls # cert-manager will create this secret for you
+loki:
+  enabled: true
+  is:"promtail-enabled": true # Promtail is Loki's log collector, configured as a DaemonSet
+
+tempo:
+  enabled: true
+
+prometheus:
+  enabled: true
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false # Important for Istio integration
+    podMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    podMonitorSelector: {}
+    probeSelector: {}
+    ruleSelector: {}
+
+# The Grafana chart automatically adds Prometheus, Loki, and Tempo as data sources
+# when they are enabled in the chart. You might need to add this block if it's not
+# automatically added.
+# datasources:
+#   datasources.yaml:
+#     apiVersion: 1
+#     datasources:
+#       - name: Prometheus
+#         type: prometheus
+#         url: http://prometheus-kube-prometheus-stack.grafana.svc.cluster.local:9090
+#         isDefault: true
+#       - name: Loki
+#         type: loki
+#         url: http://loki:3100
+#       - name: Tempo
+#         type: tempo
+#         url: http://tempo.grafana:3200

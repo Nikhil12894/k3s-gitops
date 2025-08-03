@@ -487,47 +487,86 @@ Cert-manager automates the management and issuance of TLS certificates from Let'
 
 -----
 
-### Istio with `istioctl`
+# 🚀 Phase 5: Install Istio with `istioctl`
 
 Istio provides a powerful service mesh for advanced routing, security, and observability.
 
-1.  **Download and Install `istioctl`:**
+### The Best Istio Profile for this Scenario: `minimal`
+
+The `minimal` profile is the ideal choice for your use case. Here's why:
+
+  * **It only installs the core control plane components (`istiod`)**. This gives you all the core service mesh features like mTLS, traffic routing, telemetry, and security policies.
+  * **It explicitly *omits* the `istio-ingressgateway`**. This is exactly what you want, as you've already deployed and configured the NGINX Ingress Controller to handle your external traffic.
+  * **It's resource-efficient**. By not installing unnecessary components, you keep the resource footprint of Istio small, which is a good practice for a lightweight cluster like K3s.
+
+### How to Install Istio with the `minimal` Profile
+
+You should use `istioctl` for the installation, as it's the recommended tool for managing Istio and its profiles. It allows for easy customization.
+
+1.  **Download the Istio release and Install `istioctl`:**:
 
     ```bash
     curl -L https://istio.io/downloadIstio | sh -
-    # Move into the downloaded directory
-    cd istio-*
-    # Add istioctl to your PATH for this session
+    cd istio-<VERSION>
     export PATH=$PWD/bin:$PATH
     ```
-
     To make `istioctl` available permanently, add the export command to your `~/.bashrc` file:
 
     ```bash
     echo 'export PATH=$HOME/istio-*/bin:$PATH' >> ~/.bashrc
     source ~/.bashrc
     ```
-
-2.  **Install Istio on Your Cluster:**
-
-    We'll use the `demo` profile for a balanced setup.
+2.  **Run the `istioctl` command with the `minimal` profile and the K3s platform setting**:
+    K3s uses non-standard paths for CNI configuration, so you need to tell Istio to use the correct overrides. This is a crucial step for a smooth installation on K3s.
 
     ```bash
-    istioctl install --set profile=demo -y
+    istioctl install --set profile=minimal --set values.global.platform=k3s
     ```
 
-3.  **Enable Istio Sidecar Injection:**
+    The `--set values.global.platform=k3s` flag ensures that Istio is installed with the necessary platform-specific configurations for K3s, preventing common CNI-related issues.
 
-    Create the `default` namespace and enable Istio's automatic sidecar injection.
+3.  **Verify the Installation**:
+    After the installation, you can verify that `istiod` is running but the ingress gateway is not.
 
     ```bash
-    kubectl create namespace default
-    kubectl label namespace default istio-injection=enabled
+    kubectl get pods -n istio-system
     ```
 
+    You should see the `istiod` pod in a `Running` state, but there should be no `istio-ingressgateway` pod.
+
+### Integrating with Your NGINX Ingress Controller
+
+Now that Istio is installed without its gateway, you need to configure your applications to work within the mesh.
+
+1.  **Label your namespaces for Istio injection**:
+    Istio works by injecting an Envoy sidecar proxy into your application pods. You need to enable this for the namespaces where your applications are running.
+
+    ```bash
+    kubectl label namespace <your-namespace> istio-injection=enabled --overwrite
+    ```
+
+    This label tells Istio to automatically inject the sidecar when new pods are created in that namespace.
+
+2.  **Restart your applications**:
+    To get the sidecar injected, you need to restart the deployments in the labeled namespace.
+
+    ```bash
+    kubectl rollout restart deployment -n <your-namespace>
+    ```
+
+    Once the pods restart, you'll see two containers in each pod (your application container and the Envoy sidecar).
+
+3.  **Traffic Flow**:
+    Your traffic will now flow as follows:
+
+      * External traffic arrives at your K3s cluster and is handled by the **NGINX Ingress Controller** (via the default Traefik service or a custom NGINX deployment).
+      * The NGINX Ingress Controller routes the traffic to the appropriate Kubernetes **Service** (e.g., `app-a-service`).
+      * The Envoy sidecar proxy, now running in your application pod, intercepts the traffic from the Service and applies Istio's policies (e.g., security, mTLS, observability, etc.) before it reaches your application container.
+
+This setup gives you the best of both worlds: a robust and well-understood NGINX Ingress for external traffic, and the full power of the Istio service mesh for managing and securing internal traffic between your microservices.
 -----
 
-## ⚙️ Phase 5: Deploy Your Core Applications with Helm
+## ⚙️ Phase 6: Deploy Your Core Applications with Helm
 
 This section covers deploying your key services using Helm charts.
 
