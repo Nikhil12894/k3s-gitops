@@ -1,18 +1,18 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: test-rout-app
-  namespace: argocd
-spec:
-  project: default
-  source:
-    repoURL: https://github.com/nikhil12894/k3s-gitops.git
-    targetRevision: main
-    path: manifests/rout-based-app-test
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: default
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: test-rout-app
+#   namespace: argocd
+# spec:
+#   project: default
+#   source:
+#     repoURL: https://github.com/nikhil12894/k3s-gitops.git
+#     targetRevision: main
+#     path: manifests/rout-based-app-test
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: default
+#   syncPolicy:
+#     automated:
+#       prune: true
+#       selfHeal: true
