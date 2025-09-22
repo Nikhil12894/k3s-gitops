@@ -1,0 +1,72 @@
+grafana:
+  adminPassword: X_K6xPY-Rv7RO_34@LAhmFEjAvs{VmG%
+  ingress:
+    enabled: true
+    ingressClassName: "nginx"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/rewrite-target: /
+    hosts:
+    - grafana.explorewithnk.com
+    tls:
+    - hosts:
+      - grafana.explorewithnk.com
+      secretName: explorewithnk-grafana-tls # cert-manager will create this secret for you
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-server
+        access: proxy
+        isDefault: true
+      - name: Loki
+        type: loki
+        url: http://loki:3100
+      - name: Tempo
+        type: tempo
+        url: http://tempo:3100
+        jsonData:
+          httpMethod: GET
+          tracesToLogs:
+            datasourceUid: 'Loki'
+            tags: [ 'job', 'instance', 'trace_id' ]
+            mappedTags: [ { key: 'service.name', value: 'service' } ]
+            spanStartTimeShift: '-1h'
+            spanEndTimeShift: '1h'
+            filterByTraceID: true
+            filterBySpanID: false
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 30
+        options:
+          path: /var/lib/grafana/dashboards
+  dashboards:
+    default:
+      spring-boot-observability:
+        gnetId: 17175
+        revision: 1
+        datasource: Prometheus
+
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+
+loki:
+  loki:
+    auth_enabled: false
+
+tempo:
+  tempo:
+    search_enabled: true
+    storage:
+      trace:
+        backend: local

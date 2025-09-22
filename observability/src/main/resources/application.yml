@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: observability
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    enable:
+      all: true
+  endpoint:
+    prometheus:
+      enabled: true

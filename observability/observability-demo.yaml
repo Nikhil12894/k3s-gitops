@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: observability-demo
+  namespace: observability
+  labels:
+    app: observability-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: observability-demo
+  template:
+    metadata:
+      labels:
+        app: observability-demo
+    spec:
+      containers:
+      - name: observability-demo
+        image: docker.io/nikhil12894/observabilitydemo:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+        - name: OTEL_SERVICE_NAME
+          value: "observability-demo"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://otel-collector-opentelemetry-collector:4318"
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: "http/protobuf"
+        - name: OTEL_METRICS_EXPORTER
+          value: "otlp"
+        - name: OTEL_TRACES_EXPORTER
+          value: "otlp"
+        - name: OTEL_LOGS_EXPORTER
+          value: "otlp"
+        - name: OTEL_INSTRUMENTATION_LOGS_MDC_CAPTURING_KEYS
+          value: correlationId,transactionId
+        - name: OTEL_INSTRUMENTATION_HTTP_CLIENT_CAPTURE_REQUEST_HEADERS
+          value: "correlationId,transactionId"
+        - name: OTEL_INSTRUMENTATION_HTTP_SERVER_CAPTURE_REQUEST_HEADERS
+          value: "correlationId,transactionId"
+        - name: OTEL_INSTRUMENTATION_LOGS_MDC_CAPTURING_ENABLED
+          value: "true"
+        - name: JAVA_TOOL_OPTIONS
+          value: >
+            -Dotel.instrumentation.logback-appender.experimental-log-attributes=true -Dotel.instrumentation.logback-appender.experimental.capture-code-attributes=true -Dotel.instrumentation.logback-appender.experimental.capture-marker-attribute=true -Dotel.instrumentation.logback-appender.experimental.capture-key-value-pair-attributes=true -Dotel.instrumentation.logback-appender.experimental.capture-logger-context-attributes=true -Dotel.instrumentation.logback-appender.experimental.capture-arguments=true -Dotel.instrumentation.logback-appender.experimental.capture-logstash-attributes=true -Dotel.instrumentation.logback-appender.experimental.capture-mdc-attributes=*
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: observability-demo
+  namespace: observability
+  labels:
+    app: observability-demo
+spec:
+  selector:
+    app: observability-demo
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: observability-demo-ingress
+  namespace: observability
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+  - host: springapp.explorewithnk.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: observability-demo
+            port:
+              number: 8080

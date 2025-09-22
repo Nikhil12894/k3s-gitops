@@ -1,0 +1,82 @@
+# mode: deployment
+# service:
+#   enabled: true
+
+# image:
+#   repository: otel/opentelemetry-collector
+
+# config:
+#   receivers:
+#     otlp:
+#       protocols:
+#         grpc:
+#           endpoint: 0.0.0.0:4317
+#         http:
+#           endpoint: 0.0.0.0:4318
+#   processors:
+#     batch: {}
+#   exporters:
+#     otlp:
+#       endpoint: tempo.observability.svc.cluster.local:4317
+#   service:
+#     pipelines:
+#       traces:
+#         receivers: [ otlp ]
+#         processors: [ batch ]
+#         exporters: [ otlp ]
+
+# # http://grafana-loky-promethious-k-prometheus.observability:9090/
+
+mode: deployment
+service:
+  enabled: true
+
+image:
+  repository: otel/opentelemetry-collector
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+  processors:
+    memory_limiter:
+      check_interval: 1s
+      limit_mib: 2000
+    batch: {}
+
+  exporters:
+    # optional: still send to Tempo if you want
+    # otlp/tempo:
+    #   endpoint: tempo.observability.svc.cluster.local:4317
+
+    # Elastic APM OTLP exporter
+    otlp/elastic:
+      # remove "https://" from endpoint, only host:port or fqdn
+      endpoint: "${ELASTIC_APM_SERVER_ENDPOINT}"
+      headers:
+        Authorization: "ApiKey ${ELASTIC_APM_API_KEY}"
+    # optional: log exporter for debugging
+    # logging:
+    #   loglevel: warn
+
+  service:
+    pipelines:
+      traces:
+        receivers: [ otlp ]
+        processors: [ memory_limiter, batch ]
+        exporters: [ otlp/elastic ] # , otlp/tempo if dual-export needed
+
+      metrics:
+        receivers: [ otlp ]
+        processors: [ memory_limiter, batch ]
+        exporters: [ otlp/elastic ]
+
+      logs:
+        receivers: [ otlp ]
+        processors: [ memory_limiter, batch ]
+        exporters: [ otlp/elastic ]

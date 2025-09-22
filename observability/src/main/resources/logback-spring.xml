@@ -1,0 +1,19 @@
+<configuration>
+  <property name="LOG_PATTERN"
+    value="%d{yyyy-MM-dd HH:mm:ss} [%X{correlationId}] [%X{transactionId}] %-5level %logger{36} - %msg%n" />
+
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>${LOG_PATTERN}</pattern>
+    </encoder>
+  </appender>
+  <!-- Just wrap your logging appender, for example ConsoleAppender, with OpenTelemetryAppender -->
+  <!-- <appender name="OTEL"
+    class="io.opentelemetry.instrumentation.logback.mdc.v1_0.OpenTelemetryAppender">
+    <appender-ref ref="CONSOLE" />
+  </appender> -->
+  <root level="INFO">
+    <appender-ref ref="STDOUT" />
+    <!-- <appender-ref ref="OTEL" /> -->
+  </root>
+</configuration>
