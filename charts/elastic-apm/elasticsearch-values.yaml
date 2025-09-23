@@ -1,0 +1,14 @@
+# elasticsearch-values.yaml
+# Sets up a single-node Elasticsearch cluster
+# Use this for testing/development environments
+clusterName: "my-es-cluster"
+nodeGroup: "master"
+replicas: 1
+volumeClaimTemplate:
+  accessModes: [ "ReadWriteOnce" ]
+  resources:
+    requests:
+      storage: 10Gi
+
+# helm install elasticsearch elastic/elasticsearch -f elasticsearch-values.yaml --namespace elastic-stack --create-namespace
+#

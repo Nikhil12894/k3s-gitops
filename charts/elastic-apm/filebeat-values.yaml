@@ -1,0 +1,24 @@
+# filebeat-values.yaml
+filebeat:
+  prospectors:
+  - type: container
+    paths:
+    - /var/log/containers/*.log
+  autodiscover:
+    providers:
+    - type: kubernetes
+      hints.enabled: true
+      hints.default_config:
+        type: container
+        paths:
+        - /var/log/containers/*-${data.kubernetes.container.id}.log
+
+# Output settings to connect to your Elasticsearch cluster
+output.elasticsearch:
+  hosts: [ "<ELASTICSEARCH_HOST_URL>:9200" ]
+  # Optional: Uncomment and fill in if your Elasticsearch requires authentication
+  # username: "elastic"
+  # password: "<ELASTIC_PASSWORD>"
+
+
+  # helm install filebeat elastic/filebeat -f filebeat-values.yaml --namespace elastic-stack

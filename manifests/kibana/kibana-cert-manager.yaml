@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: explorewithnk-kibana-cert
+  namespace: cert-manager
+spec:
+  secretName: explorewithnk-kibana-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  commonName: kibana.explorewithnk.com
+  dnsNames:
+  - kibana.explorewithnk.com

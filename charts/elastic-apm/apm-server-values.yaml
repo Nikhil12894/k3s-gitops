@@ -1,0 +1,21 @@
+# apm-server-values.yaml
+apm-server:
+  host: "0.0.0.0:8200"
+
+# Output settings to connect to your Elasticsearch cluster
+output.elasticsearch:
+  hosts: [ "<ELASTICSEARCH_HOST_URL>:9200" ]
+  # Optional: Uncomment and fill in if your Elasticsearch requires authentication
+  # username: "elastic"
+  # password: "<ELASTIC_PASSWORD>"
+
+  # Load the APM Kibana dashboards
+setup.dashboards.enabled: true
+setup.kibana:
+  host: "<KIBANA_HOST_URL>:5601"
+
+# ELASTICSEARCH_HOST_URL: http://<elasticsearch-service-name>.<namespace>.svc.cluster.local:<port>
+
+# KIBANA_HOST_URL: http://<kibana-service-name>.<namespace>.svc.cluster.local:<port>
+
+# helm install apm-server elastic/apm-server -f apm-server-values.yaml --namespace elastic-stack --create-namespace
