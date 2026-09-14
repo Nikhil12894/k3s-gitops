@@ -1,0 +1,12 @@
+# Helm values for External Secrets Operator
+installCRDs: true
+
+replicaCount: 1
+
+leaderElect: false
+
+webhook:
+  create: true
+
+certController:
+  create: true

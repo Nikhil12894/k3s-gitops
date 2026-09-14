@@ -1,0 +1,119 @@
+# 1. Pull the password dynamically from Vaultwarden into a native K8s secret
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: app-db-secret-sync
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  refreshInterval: "1h"
+  secretStoreRef:
+    name: bitwarden-backend
+    kind: ClusterSecretStore
+  target:
+    name: app-db-secrets
+    creationPolicy: Owner
+  data:
+    - secretKey: POSTGRES_PASSWORD
+      remoteRef:
+        key: "app-core"
+        property: "db_password"
+---
+# 2. Deploy the Spring Boot app with JVM container settings, Valkey, Kafka, and readiness checks
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-core
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: app-core
+  template:
+    metadata:
+      labels:
+        app: app-core
+    spec:
+      containers:
+        - name: app-core
+          image: ghcr.io/nikhil12894/app-core:latest
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "384Mi"
+            limits:
+              cpu: "1000m"
+              memory: "768Mi"
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgresql.default.svc.cluster.local:5432/app_db"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "postgres"
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-db-secrets
+                  key: POSTGRES_PASSWORD
+            - name: SPRING_DATA_REDIS_HOST
+              value: "valkey.default.svc.cluster.local"
+            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka.default.svc.cluster.local:9092"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+---
+# 3. Horizontal Pod Autoscaler for high load handling
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: app-core-hpa
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: app-core
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75
+---
+# 4. Service (ClusterIP only - internal)
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-core
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: app-core

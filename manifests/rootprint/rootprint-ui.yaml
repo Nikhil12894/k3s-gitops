@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rootprint-ui
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rootprint-ui
+  template:
+    metadata:
+      labels:
+        app: rootprint-ui
+    spec:
+      containers:
+        - name: rootprint-ui
+          image: ghcr.io/nikhil12894/rootprint:latest
+          env:
+            - name: QUICKWIT_URL
+              value: "http://quickwit.default.svc.cluster.local:7280"
+          ports:
+            - name: http
+              containerPort: 3000
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rootprint-ui
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+  selector:
+    app: rootprint-ui
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rootprint-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - rootprint.explorewithnk.com
+      secretName: explorewithnk-rootprint-tls
+  rules:
+    - host: rootprint.explorewithnk.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rootprint-ui
+                port:
+                  number: 80
