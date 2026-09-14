@@ -20,7 +20,7 @@ spec:
         key: "app-core"
         property: "db_password"
 ---
-# 2. Deploy the Spring Boot app with JVM container settings and readiness checks
+# 2. Deploy the Spring Boot app with JVM container settings, Valkey, Kafka, and readiness checks
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -59,9 +59,9 @@ spec:
                   name: app-db-secrets
                   key: POSTGRES_PASSWORD
             - name: SPRING_DATA_REDIS_HOST
-              value: "redis.default.svc.cluster.local"
-            - name: SPRING_RABBITMQ_HOST
-              value: "rabbitmq.default.svc.cluster.local"
+              value: "valkey.default.svc.cluster.local"
+            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka.default.svc.cluster.local:9092"
             - name: JAVA_TOOL_OPTIONS
               value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
           ports:

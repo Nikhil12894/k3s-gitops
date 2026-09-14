@@ -1,6 +1,6 @@
 # K3s GitOps Cluster Setup
 
-This repository contains the declarative GitOps manifests and bootstrap documentation for a single-node **K3s** Kubernetes cluster managed via **Argo CD**, featuring automated **Sync Waves**, **Vaultwarden + External Secrets Operator (ESO)** for secret injection, **Core Databases (PostgreSQL, Redis, RabbitMQ)**, **MinIO S3**, **Keycloak**, **Spring Boot microservices (with HPA)**, **Rootprint + Quickwit Observability**, and **Automated S3 Backups**.
+This repository contains the declarative GitOps manifests and bootstrap documentation for a single-node **K3s** Kubernetes cluster managed via **Argo CD**, featuring automated **Sync Waves**, **Vaultwarden + External Secrets Operator (ESO)** for secret injection, **Consolidated PostgreSQL 16**, **Valkey 8 (open-source Redis alternative)**, **Apache Kafka (KRaft mode, ZooKeeper-less)** + **Kafka UI**, **MinIO S3**, **Keycloak**, **Spring Boot microservices (with HPA)**, **Rootprint + Quickwit Observability**, and **Automated S3 Backups**.
 
 ---
 
@@ -12,9 +12,9 @@ Deployments are strictly sequenced using **Argo CD Sync Waves**. Argo CD will wa
 flowchart TD
   Wminus2["Wave -2: External Secrets Operator & ArgoCD Ingress"]
   Wminus1["Wave -1: Vaultwarden Secrets Backend & MinIO S3"]
-  W0["Wave 0: Core Databases (PostgreSQL, Redis, RabbitMQ)"]
-  W1["Wave 1: Keycloak IAM (wired to PostgreSQL)"]
-  W2["Wave 2: Spring Boot Microservices (HPA + Secret Sync)"]
+  W0["Wave 0: Core Databases (PostgreSQL 16, Valkey 8, Kafka KRaft)"]
+  W1["Wave 1: Keycloak IAM (wired to Consolidated PostgreSQL)"]
+  W2["Wave 2: Spring Boot Microservices (HPA + Valkey + Kafka)"]
   W3["Wave 3: Observability (Rootprint + Quickwit), Backups & Homepage"]
 
   Wminus2 --> Wminus1 --> W0 --> W1 --> W2 --> W3
@@ -24,10 +24,25 @@ flowchart TD
 | :--- | :--- | :--- | :--- |
 | **Wave -2** | `00-external-secrets.yaml`<br>`argocd.yaml` | External Secrets Operator (ESO), ArgoCD Ingress | Installs ESO CRDs and controller before any secret is required |
 | **Wave -1** | `01-secrets-backend.yaml`<br>`02-minio.yaml` | Vaultwarden, ClusterSecretStore, MinIO S3 | Password management backend & local S3 object store |
-| **Wave 0** | `03-databases.yaml` | PostgreSQL 16, Redis 7, RabbitMQ 3 | Core persistent data stores & message broker |
-| **Wave 1** | `04-keycloak.yaml` | Keycloak 26 (PostgreSQL backend) | Centralized SSO and OIDC identity provider |
-| **Wave 2** | `05-spring-apps.yaml` | Spring Boot apps (`app-core`), HPA, ExternalSecret | JVM container microservices auto-scaling on CPU load |
+| **Wave 0** | `03-databases.yaml` | PostgreSQL 16, Valkey 8, Apache Kafka (KRaft) + Kafka UI | Consolidated DB, in-memory cache/store, and distributed event log |
+| **Wave 1** | `04-keycloak.yaml` | Keycloak 26 (wired to consolidated PostgreSQL) | Centralized SSO and OIDC identity provider |
+| **Wave 2** | `05-spring-apps.yaml` | Spring Boot apps (`app-core`), HPA, ExternalSecret | JVM microservices with Valkey caching, Kafka streaming, and HPA |
 | **Wave 3** | `06-rootprint.yaml`<br>`07-backups.yaml`<br>`08-homepage.yaml` | Quickwit + Rootprint UI, Backup CronJob, Homepage | Searchable observability, automated daily S3 dumps & landing page |
+
+---
+
+## ⚡ Valkey & Apache Kafka Architectural Decisions
+
+### 1. Valkey (In Place of Redis)
+* **Open-Source Freedom**: Fully open-source Linux Foundation project created following Redis's relicensing away from BSD.
+* **100% Drop-in Compatibility**: Valkey supports the exact same Redis serialization protocol (RESP), port 6379, and commands. Spring Boot applications use `spring-data-redis` (Lettuce/Jedis) without any code modifications.
+* **Compatibility Aliases**: Dual Kubernetes services (`valkey` and `redis`) are provisioned so any service querying either hostname works seamlessly.
+
+### 2. Apache Kafka in KRaft Mode (In Place of RabbitMQ)
+* **No ZooKeeper (KRaft Consensus)**: Built using Kafka 3.8 running Kafka Raft metadata mode (`process.roles=controller,broker`).
+* **High Performance & Replayability**: Complete event log streaming platform enabling event sourcing, pub/sub, and audit trails.
+* **Right-Sized for VPS**: Configured with `-Xms512M -Xmx1024M` JVM limits, leveraging the 32 GB RAM available on the node without memory bloat.
+* **Kafka UI Included**: Deployed alongside Kafka with ingress at `https://kafka.explorewithnk.com` for topic and consumer group management.
 
 ---
 
@@ -42,6 +57,7 @@ All public HTTP/HTTPS traffic is handled by **NGINX Ingress Controller** with au
 | **Keycloak** | [`keycloak.explorewithnk.com`](https://keycloak.explorewithnk.com) | `keycloak` | `keycloak:80` | `nginx` | `explorewithnk-keycloak-tls` |
 | **Vaultwarden** | [`vault.explorewithnk.com`](https://vault.explorewithnk.com) | `default` | `vaultwarden:80` | `nginx` | `vaultwarden-tls` |
 | **MinIO Console**| [`minio.explorewithnk.com`](https://minio.explorewithnk.com) | `default` | `minio:9001` | `nginx` | `explorewithnk-minio-tls` |
+| **Kafka UI** | [`kafka.explorewithnk.com`](https://kafka.explorewithnk.com) | `default` | `kafka-ui:80` | `nginx` | `explorewithnk-kafka-tls` |
 | **Rootprint UI** | [`rootprint.explorewithnk.com`](https://rootprint.explorewithnk.com)| `default` | `rootprint-ui:80` | `nginx` | `explorewithnk-rootprint-tls` |
 
 ---
@@ -56,8 +72,8 @@ k3s-gitops/
 │       ├── 00-external-secrets.yaml     # Wave -2: ESO Operator
 │       ├── 01-secrets-backend.yaml      # Wave -1: Vaultwarden & ClusterSecretStore
 │       ├── 02-minio.yaml                # Wave -1: S3 Storage & Backups
-│       ├── 03-databases.yaml            # Wave  0: PostgreSQL, Redis, RabbitMQ
-│       ├── 04-keycloak.yaml             # Wave  1: Identity Provider
+│       ├── 03-databases.yaml            # Wave  0: PostgreSQL, Valkey, Kafka + Kafka UI
+│       ├── 04-keycloak.yaml             # Wave  1: Identity Provider (Consolidated DB)
 │       ├── 05-spring-apps.yaml          # Wave  2: Spring Boot Microservices + HPA
 │       ├── 06-rootprint.yaml            # Wave  3: Rootprint + Quickwit Observability
 │       ├── 07-backups.yaml              # Wave  3: Automated S3/MinIO Backup CronJobs
@@ -80,13 +96,13 @@ k3s-gitops/
     │   ├── minio.yaml
     │   └── minio-cert-manager.yaml
     ├── databases/                       # Core persistent data layer
-    │   ├── postgresql.yaml              # PostgreSQL StatefulSet + Service
-    │   ├── redis.yaml                   # Redis Deployment + Service + PVC
-    │   └── rabbitmq.yaml                # RabbitMQ StatefulSet + Service
+    │   ├── postgresql.yaml              # PostgreSQL 16 StatefulSet + Multi-DB Init
+    │   ├── valkey.yaml                  # Valkey 8 Deployment + Service + PVC
+    │   └── kafka.yaml                   # Apache Kafka KRaft StatefulSet + Kafka UI
     ├── keycloak/                        # Keycloak deployment wired to PostgreSQL
     │   ├── keycloak.yaml
     │   └── keycloak-cert-manager.yaml
-    ├── spring-apps/                     # Microservices with HPA and ExternalSecrets
+    ├── spring-apps/                     # Microservices with HPA, Valkey & Kafka
     │   └── app-core.yaml
     ├── rootprint/                       # Quickwit log indexing + Rootprint UI
     │   ├── quickwit.yaml
@@ -104,63 +120,46 @@ k3s-gitops/
 
 ---
 
-## 🔐 Secrets Injection via Vaultwarden & ESO
+## 🗄️ PostgreSQL Consolidation & Data Migration (Option B)
 
-1. **Vaultwarden Deployment**: Deployed in `default` namespace with a persistent volume (`5Gi`) mounted at `/data`.
-2. **Master Account Setup**:
-   - Access `https://vault.explorewithnk.com` to register your admin account.
-   - Once registered, set `SIGNUPS_ALLOWED: "false"` in `manifests/secrets-backend/vaultwarden.yaml` to lock down signups.
-3. **ClusterSecretStore**: Configured as `bitwarden-backend` to bridge ESO with your vault items.
-4. **ExternalSecret Synchronization**:
-   Apps define an `ExternalSecret` resource (e.g. `app-db-secret-sync`), which reads passwords dynamically and materializes a native Kubernetes Secret (`app-db-secrets`), used by container environment variables (`SPRING_DATASOURCE_PASSWORD`).
-
----
-
-## 💾 Automated Database Backups (CronJob to MinIO S3)
-
-The automated backup job (`manifests/backups/cronjob-postgres-backup.yaml`) runs every night at **02:00 AM UTC**:
-
-1. Spins up an Amazon Linux / AWS CLI container.
-2. Runs `pg_dumpall` against `postgresql.default.svc.cluster.local`.
-3. Compresses the output with `gzip` (`pg_all_YYYYMMDD_HHMMSS.sql.gz`).
-4. Uploads the compressed archive directly to the MinIO S3 bucket `homelab-backups`.
+1. **Multi-Database Setup**:
+   The consolidated PostgreSQL instance (`manifests/databases/postgresql.yaml`) initializes:
+   * `app_db`: Primary database for Spring Boot microservices.
+   * `bitnami_keycloak`: Dedicated database for Keycloak IAM with user `bn_keycloak1`.
+2. **Restoring Live Keycloak Data**:
+   A verified backup of your live Keycloak database has been extracted. Once the new PostgreSQL is running in `default`:
+   ```bash
+   kubectl cp /path/to/keycloak_backup.sql default/postgresql-0:/tmp/keycloak_backup.sql
+   kubectl exec -n default postgresql-0 -- psql -U postgres -d bitnami_keycloak -f /tmp/keycloak_backup.sql
+   ```
+3. **Decommissioning Old PostgreSQL**:
+   After verifying Keycloak operates normally against the consolidated PostgreSQL, delete the old statefulset in `keycloak`:
+   ```bash
+   kubectl delete statefulset keycloak-app-postgresql -n keycloak
+   kubectl delete pvc data-keycloak-app-postgresql-0 -n keycloak
+   ```
 
 ---
 
 ## 🚀 Execution & Git Push Steps
 
-To deploy this setup to your cluster:
-
 1. **Review and stage all changes:**
    ```bash
    git status
-   git add argo/ manifests/ bootstrap/ README.md
+   git add argo/ manifests/ README.md
    ```
 
 2. **Commit the refactored architecture:**
    ```bash
-   git commit -m "refactor: restructure for sequential ArgoCD waves, Vaultwarden/ESO secrets, and MinIO backups"
+   git commit -m "feat: adopt Valkey and Kafka KRaft with consolidated PostgreSQL"
    ```
 
 3. **Push to GitHub:**
    ```bash
-   git push origin main
+   git push origin whole-infra
    ```
 
 4. **Trigger Argo CD GitOps Sync:**
    From the Argo CD Web UI (`https://argocd.explorewithnk.com`):
    - Select the `root` application.
-   - Click **Sync** (ensure **Prune** is checked).
-
-   Or via CLI:
-   ```bash
-   argocd app sync root --prune
-   ```
-
-Argo CD will automatically orchestrate the rollout in sequence:
-* **Wave -2** ➔ External Secrets Operator & Ingress
-* **Wave -1** ➔ Vaultwarden & MinIO S3
-* **Wave 0** ➔ PostgreSQL, Redis, RabbitMQ
-* **Wave 1** ➔ Keycloak
-* **Wave 2** ➔ Spring Boot Microservices (`app-core` + HPA)
-* **Wave 3** ➔ Rootprint UI, Quickwit, Daily Backup CronJob & Homepage
+   - Click **Sync** (with **Prune** enabled).

@@ -1,4 +1,18 @@
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  init.sql: |
+    CREATE DATABASE bitnami_keycloak;
+    CREATE USER bn_keycloak1 WITH ENCRYPTED PASSWORD 'bn_keycloak1';
+    GRANT ALL PRIVILEGES ON DATABASE bitnami_keycloak TO bn_keycloak1;
+    ALTER DATABASE bitnami_keycloak OWNER TO bn_keycloak1;
+---
+apiVersion: v1
 kind: Secret
 metadata:
   name: app-db-secrets
@@ -8,6 +22,7 @@ metadata:
 type: Opaque
 stringData:
   POSTGRES_PASSWORD: "postgrespassword123"
+  KEYCLOAK_DB_PASSWORD: "bn_keycloak1"
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -47,14 +62,16 @@ spec:
               containerPort: 5432
           resources:
             requests:
-              cpu: "100m"
-              memory: "256Mi"
+              cpu: "150m"
+              memory: "384Mi"
             limits:
-              cpu: "1000m"
-              memory: "1024Mi"
+              cpu: "1500m"
+              memory: "1536Mi"
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
           readinessProbe:
             exec:
               command:
@@ -71,6 +88,10 @@ spec:
                 - pg_isready -U postgres -d app_db
             initialDelaySeconds: 30
             periodSeconds: 10
+      volumes:
+        - name: init-scripts
+          configMap:
+            name: postgres-init-scripts
   volumeClaimTemplates:
     - metadata:
         name: postgres-data
@@ -80,7 +101,7 @@ spec:
         storageClassName: local-path
         resources:
           requests:
-            storage: 10Gi
+            storage: 15Gi
 ---
 apiVersion: v1
 kind: Service
