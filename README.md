@@ -1,180 +1,177 @@
-<!-- ## Phase 1: Prepare the VPS
-### 1. Create a Non-Root User + SSH Key Authentication
-On your local machine (Linux/macOS):
+# K3s GitOps Cluster Setup
 
-```bash
-ssh-keygen -t ed25519 -C "your_email@example.com"
+This repository contains the declarative GitOps manifests and bootstrap documentation for a single-node **K3s** Kubernetes cluster hosted on a VPS, managed via **Argo CD**, fronted by **NGINX Ingress Controller**, and secured with **cert-manager** (Let's Encrypt).
+
+---
+
+## 🏗️ Architecture & Core Components
+
+- **K3s** (Lightweight Kubernetes v1.33+, Traefik disabled in favor of NGINX Ingress)
+- **NGINX Ingress Controller** (Edge reverse proxy handling HTTP/HTTPS external ingress via NodePort/LoadBalancer on public IP)
+- **Cert-Manager** (Automated TLS certificate issuance and renewals via Let's Encrypt ACME HTTP-01 challenge)
+- **Kubernetes-Replicator** (Automated secret/config replication across namespaces)
+- **Argo CD** (Declarative GitOps continuous delivery using the "App of Apps" pattern)
+- **Keycloak** (Enterprise Identity & Access Management with PostgreSQL backend)
+- **Homepage** (Landing page application)
+
+---
+
+## 🗺️ Domain Routing & Services (`explorewithnk.com`)
+
+All public traffic is routed through **NGINX Ingress Controller** with automatic HTTPS redirection and Let's Encrypt TLS certificates:
+
+| Application | Domain / URL | Namespace | Backend Service | Ingress Class | TLS Secret |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Homepage** | [`explorewithnk.com`](https://explorewithnk.com) | `default` | `homepage:80` | `nginx` | `explorewithnk-root-tls` |
+| **Argo CD** | [`argocd.explorewithnk.com`](https://argocd.explorewithnk.com) | `argocd` | `argocd-server:80` | `nginx` | `explorewithnk-argocd-tls` |
+| **Keycloak** | [`keycloak.explorewithnk.com`](https://keycloak.explorewithnk.com) | `keycloak` | `keycloak-app:80` | `nginx` | `explorewithnk-keycloak-tls` |
+
+> ℹ️ **Decommissioned stacks**: Grafana, Prometheus, Loki, and Istio have been decommissioned and removed from the active routing topology.
+
+---
+
+## 📁 Repository Structure
+
+```text
+k3s-gitops/
+├── argo/
+│   ├── root-app.yaml                   # Argo CD Root "App of Apps"
+│   └── apps/                           # Child Application manifests
+│       ├── argocd.yaml                 # Argo CD ingress & certsync
+│       ├── homepage.yaml               # Homepage deployment & ingress
+│       ├── keycloak.yaml               # Keycloak app & certs
+│       ├── grafana.yaml                # (Disabled / Commented)
+│       ├── kibana.yaml                 # (Disabled / Commented)
+│       ├── minio.yaml                  # (Disabled / Commented)
+│       └── test-rout-app.yaml          # (Disabled / Commented)
+├── bootstrap/
+│   └── install/
+│       └── k3s-install.sh              # Single-node cluster bootstrap script
+├── charts/                             # Helm values for deployed services
+│   ├── argocd/values.yaml              # Custom values for Argo CD
+│   ├── keycloak/values.yaml            # Custom values for Bitnami Keycloak
+│   ├── minio/                          # Archived Helm values
+│   ├── elastic-apm/                    # Archived Helm values
+│   └── observability-stack/            # Archived Helm values
+├── manifests/                          # Raw Kubernetes manifests
+│   ├── argocd/                         # Argo CD TLS certificate
+│   ├── cert-manager/                   # ClusterIssuer (letsencrypt-prod)
+│   ├── homepage/                       # Homepage deployment, service & ingress
+│   ├── keycloak/                       # Keycloak TLS certificate
+│   ├── grafana/                        # Decommissioned Grafana cert
+│   ├── kibana/                         # Decommissioned Kibana cert
+│   ├── minio/                          # Decommissioned MinIO cert
+│   └── rout-based-app-test/            # Route-based test manifests
+└── README.md                           # Main cluster documentation
 ```
-This generates keys at `~/.ssh/id_ed25519` and `~/.ssh/id_ed25519.pub`.
 
-### On your VPS:
+---
 
-```bash
-# Log in as root
-ssh root@your-public-ip
+## 🚀 Cluster Setup & Bootstrap Guide
 
-# Create a user
-adduser nkuser
-usermod -aG sudo nkuser
+### Phase 1: VPS Hardening & SSH Setup
 
-# Create .ssh dir
-mkdir -p /home/nkuser/.ssh
-chmod 700 /home/nkuser/.ssh
+1. **Generate SSH key pair** (on your local machine):
+   ```bash
+   ssh-keygen -t ed25519 -C "your_email@example.com"
+   ```
 
-# Paste your public key
-nano /home/nkuser/.ssh/authorized_keys
-# Paste contents of ~/.ssh/id_ed25519.pub
+2. **Configure non-root user on VPS**:
+   ```bash
+   ssh root@<VPS_IP>
 
-# Set permissions
-chmod 600 /home/nkuser/.ssh/authorized_keys
-chown -R nkuser:nkuser /home/nkuser/.ssh
+   # Create non-root user with sudo access
+   adduser nkuser
+   usermod -aG sudo nkuser
 
-# Disable root login (optional but recommended)
-nano /etc/ssh/sshd_config
-# Set: PermitRootLogin no
+   # Add SSH public key
+   mkdir -p /home/nkuser/.ssh
+   chmod 700 /home/nkuser/.ssh
+   cat <<EOF > /home/nkuser/.ssh/authorized_keys
+   <PASTE_LOCAL_ED25519_PUBLIC_KEY>
+   EOF
+   chmod 600 /home/nkuser/.ssh/authorized_keys
+   chown -R nkuser:nkuser /home/nkuser/.ssh
 
+   # Harden SSH config (disable root login)
+   sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+   systemctl restart sshd
+   ```
 
-# Restart SSH
-systemctl restart sshd
-```
+---
 
-### Test login from local:
+### Phase 2: Install K3s
 
-```bash
-ssh nkuser@your-public-ip
-```
-
-
-## Phase 2: Install and Configure k3s
-Install K3s with Traefik disabled:
+Install K3s with the default Traefik ingress disabled (we use NGINX Ingress Controller for production-grade ingress):
 
 ```bash
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="\
-  --disable=traefik
-  --bind-address 80.188.231.97 \
-  --tls-san 80.188.231.97 \
+  --disable=traefik \
+  --bind-address 180.188.231.97 \
+  --tls-san 180.188.231.97 \
   --tls-san explorewithnk.com \
-  --node-external-ip 80.188.231.97" sh -
+  --node-external-ip 180.188.231.97" sh -
 ```
 
-
-### Verify k3s
+Verify K3s:
 ```bash
 sudo kubectl get nodes
 ```
 
+---
 
-After installing K3s, the `kubectl` config file is owned by `root`, so running `kubectl` as a normal user (without `sudo`) requires a one-time setup.
+### Phase 3: Configure `kubectl` for Non-Root User & Local Machine
+
+1. **On VPS (for `nkuser`)**:
+   ```bash
+   mkdir -p $HOME/.kube
+   sudo cp /etc/rancher/k3s/k3s.yaml $HOME/.kube/config
+   sudo chown -R nkuser:nkuser $HOME/.kube
+   chmod 600 $HOME/.kube/config
+   echo 'export KUBECONFIG=$HOME/.kube/config' >> ~/.bashrc
+   source ~/.bashrc
+   ```
+
+2. **On Local Machine**:
+   ```bash
+   scp nkuser@180.188.231.97:/home/nkuser/.kube/config ~/.kube/config-k3s
+   # Update server IP inside config if necessary:
+   sed -i '' 's/127.0.0.1/180.188.231.97/g' ~/.kube/config-k3s
+   export KUBECONFIG=~/.kube/config-k3s
+   kubectl get nodes
+   ```
 
 ---
 
-## Phase 3: Steps to Use `kubectl` Without `sudo`
+### Phase 4: Core Infrastructure Services
 
-### 1. **Copy kubeconfig to your user's `.kube` directory**
-
-Assuming your user is `nkuser`, run:
-
-```bash
-sudo mkdir -p /home/nkuser/.kube
-sudo cp /etc/rancher/k3s/k3s.yaml /home/nkuser/.kube/config
-sudo chown -R nkuser:nkuser /home/nkuser/.kube
-```
-
-### 2. **(Optional) Set correct permissions**
-
-```bash
-chmod 600 /home/nkuser/.kube/config
-```
-
-### 3. **Set the `KUBECONFIG` environment variable**
-
-You can set it **temporarily** like this:
-
-```bash
-export KUBECONFIG=$HOME/.kube/config
-```
-
-Or make it **permanent** by adding it to your shell config (`~/.bashrc`, `~/.zshrc`, etc.):
-
-```bash
-echo 'export KUBECONFIG=$HOME/.kube/config' >> ~/.bashrc
-source ~/.bashrc
-```
-
-### ✅ Now test:
-
-```bash
-kubectl get nodes
-```
-### copy k3s config to local machine
-```bash
-scp nkuser@180.188.231.97:/home/nkuser/.kube/config ~/.kube/config
-```
-You should see your K3s node **without using `sudo`**.
-
-## Phase 4: Install Nginx Ingress Controller
-
+#### 1. NGINX Ingress Controller
+Deploy ingress-nginx for cloud/VPS provider:
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.0/deploy/static/provider/cloud/deploy.yaml
 ```
 
-## Phase 5: Install Helm
+Verify controller pod & load balancer service:
+```bash
+kubectl get pods -n ingress-nginx
+kubectl get svc -n ingress-nginx
+```
+
+#### 2. Helm
+Install Helm 3:
 ```bash
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 ```
 
-## Phase 6: Install Istio with `istioctl` 
-
-#### Step-by-Step: Install istioctl
-1. Download Istio
-```bash
-curl -L https://istio.io/downloadIstio | sh -
-```
-This will:
-
-Download the latest Istio release (e.g., istio-1.22.0/)
-
-Place it in your current directory
-
-2. Add istioctl to your PATH
-```bash
-cd istio-*
-export PATH=$PWD/bin:$PATH
-```
-To make this permanent, add that line to your shell config:
-
-```bash
-echo 'export PATH=$HOME/istio-*/bin:$PATH' >> ~/.bashrc
-source ~/.bashrc
-```
-Replace ~ with the full path if needed.
-
-3. Verify
-```bash
-istioctl version
-```
-You should now see both client and control plane versions.
-
-4. install istio on node 
-```bash
-istioctl install --set profile=demo -y
-```
-4. kubectl create namespace default
-```sh
-kubectl label namespace default istio-injection=enabled
-```
-
-### Phase 7: Install cert-manager if you want to use Let's Encrypt
-1. Install cert-manager
+#### 3. Cert-Manager & Let's Encrypt ClusterIssuer
+Deploy cert-manager CRDs and controllers:
 ```bash
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
 ```
-2. Verify
-```bash
-kubectl get pods -n cert-manager
-```
-3. Install Let's Encrypt Issuer `my-cluster-issuer.yaml`
+
+Apply the Let's Encrypt production `ClusterIssuer`:
 ```yaml
+# manifests/cert-manager/my-cluster-issuer.yaml
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
@@ -189,480 +186,157 @@ spec:
     - http01:
         ingress:
           class: nginx
-
 ```
 ```bash
 kubectl apply -f manifests/cert-manager/my-cluster-issuer.yaml
 ```
 
-
-
+#### 4. Kubernetes Replicator
+Replicates TLS secrets from `cert-manager` to application namespaces:
+```bash
 helm repo add mittwald https://helm.mittwald.de
-
-kubectl create namespace kubernetes-replicator
-
-helm install kubernetes-replicator mittwald/kubernetes-replicator \
+helm repo update
+kubectl create namespace kubernetes-replicator --dry-run=client -o yaml | kubectl apply -f -
+helm upgrade --install kubernetes-replicator mittwald/kubernetes-replicator \
   --namespace kubernetes-replicator \
   --set replicationEnabled.secrets=true
-
-## Phase 8: Install Argo CD use [values.yaml](./charts/argocd/values.yaml)
-
-```bash
-kubectl create namespace argocd
-kubectl apply -f manifests/argo/argocd-cert-manager.yaml # this will create custom certificate for ingress for argocd and the use the same secretsName in values.yaml
-helm install argocd argo/argo-cd -f values.yaml --namespace argocd
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
 ```
 
-## Phase 9: Install keycloak use [values.yaml](./charts/keycloak/values.yaml)
+---
+
+### Phase 5: Core Application Deployments
+
+#### 1. Argo CD
 ```bash
-kubectl create namespace keycloak
+kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f manifests/argocd/argocd-cert-manager.yaml
+helm repo add argo https://argoproj.github.io/argo-helm
+helm upgrade --install argocd argo/argo-cd -f charts/argocd/values.yaml --namespace argocd
+```
+
+Fetch initial admin password:
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d && echo
+```
+
+#### 2. Keycloak (SSO / IAM)
+```bash
+kubectl create namespace keycloak --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f manifests/keycloak/keycloak-cert-manager.yaml
-helm install keycloak-app oci://registry-1.docker.io/bitnamicharts/keycloak -f values.yaml -n keycloak
-```
----
-
-## 📁 Folder Structure
-
-```bash
-k3s-gitops/
-├── install/
-│   └── k3s-install.sh               # K3s, Istio, cert-manager, ArgoCD bootstrap script
-├── argo/
-│   ├── root-app.yaml               # Argo CD root ApplicationSet
-│   └── apps/
-│       ├── istio.yaml
-│       ├── cert-manager.yaml
-│       ├── keycloak.yaml
-│       ├── grafana.yaml
-│       ├── prometheus.yaml
-│       ├── loki.yaml
-│       ├── tempo.yaml
-│       ├── vault.yaml
-│       └── your-app.yaml
-├── manifests/
-│   ├── istio/
-│   │   ├── gateway.yaml
-│   │   └── virtualservices/*.yaml
-│   ├── cert-manager/
-│   │   └── cluster-issuer.yaml
-│   └── tls/
-│       └── certificates/*.yaml
-└── README.md
+helm upgrade --install keycloak-app oci://registry-1.docker.io/bitnamicharts/keycloak -f charts/keycloak/values.yaml -n keycloak
 ```
 
 ---
 
-## 🚀 Domain Routing (`explorewithnk.com`)
+### Phase 6: Enable GitOps with Argo CD (Root App)
 
-| App          | Subdomain                     |
-|--------------|-------------------------------|
-| homepage     | <a href="https://explorewithnk.com" target="_blank">`explorewithnk.com`</a> |
-
-> 🔐 All services are exposed via Istio Ingress Gateway with TLS using Let's Encrypt.
-
-Bootstrap Argo CD root app:
-
-```bash
-kubectl apply -f argo/root-app.yaml
-```
-Argo CD will auto-sync the rest.
-
-
-
-
-
-
-
-
----
-###  Uninstall K3s:
-```bash
-sudo /usr/local/bin/k3s-uninstall.sh
-```
---- -->
-
-# K3s GitOps Cluster Setup
-
-This guide walks you through setting up a K3s cluster from scratch, securing it, and deploying a modern GitOps pipeline using **Argo CD**, **Istio**, and **cert-manager**.
-
-## 🚀 Phase 1: Prepare Your VPS
-
-First, we'll set up a secure, non-root user on your Virtual Private Server (VPS) and enable SSH key authentication for a password-less login.
-
-### 1\. Generate SSH Keys (On your local machine)
-
-If you don't already have SSH keys, run this command on your local machine to generate a new pair.
-
-```bash
-ssh-keygen -t ed25519 -C "your_email@example.com"
-```
-
-This creates two files in your `~/.ssh` directory: `id_ed25519` (your private key) and `id_ed25519.pub` (your public key).
-
-### 2\. Configure Your VPS
-
-Log in to your VPS as the **root** user and perform the following steps to create a new user and add your public key.
-
-```bash
-# Log in as root
-ssh root@your-public-ip
-
-# Create a new user (e.g., 'nkuser') and add them to the 'sudo' group
-adduser nkuser
-usermod -aG sudo nkuser
-
-# Create the .ssh directory and set permissions
-mkdir -p /home/nkuser/.ssh
-chmod 700 /home/nkuser/.ssh
-
-# Copy your local public key to the authorized_keys file on the server
-# Use a text editor like `nano` to paste the contents of ~/.ssh/id_ed25519.pub
-nano /home/nkuser/.ssh/authorized_keys
-
-# Paste your public key here (it's a long string of characters)
-# Then save and exit nano (Ctrl+X, Y, Enter)
-
-# Secure the authorized_keys file and set ownership
-chmod 600 /home/nkuser/.ssh/authorized_keys
-chown -R nkuser:nkuser /home/nkuser/.ssh
-
-# (Optional but HIGHLY Recommended) Disable root login for better security
-nano /etc/ssh/sshd_config
-# Find the line 'PermitRootLogin' and change it to 'no'.
-# Set: PermitRootLogin no
-
-# Restart the SSH service to apply changes
-systemctl restart sshd
-```
-
-### 3\. Test Your New Login
-
-Log out of the root session and try logging in with your new user from your local machine.
-
-```bash
-ssh nkuser@your-public-ip
-```
-
-If you log in successfully, you're ready for the next phase\!
-
------
-
-## 🏗️ Phase 2: Install and Configure K3s
-
-Now we'll install K3s, a lightweight Kubernetes distribution, with some key configurations.
-
-### 1\. Install K3s
-
-Use the following command to install K3s. This command disables the default Traefik Ingress controller because we'll be using Istio and an Nginx Ingress controller later.
-
-```bash
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="\
-  --disable=traefik
-  --bind-address 80.188.231.97 \
-  --tls-san 80.188.231.97 \
-  --tls-san explorewithnk.com \
-  --node-external-ip 80.188.231.97" sh -
-```
-
-### 2\. Verify the Installation
-
-Check that your K3s node is running and ready.
-
-```bash
-sudo kubectl get nodes
-```
-
------
-
-## 🔑 Phase 3: Set up `kubectl` for Your User
-
-By default, the `kubectl` configuration file is owned by the root user. To use `kubectl` without `sudo`, you need to set up the config file for your non-root user.
-
-### 1\. Copy the Kubeconfig File
-
-```bash
-# Create the .kube directory
-sudo mkdir -p /home/nkuser/.kube
-# Copy the config file and set ownership
-sudo cp /etc/rancher/k3s/k3s.yaml /home/nkuser/.kube/config
-sudo chown -R nkuser:nkuser /home/nkuser/.kube
-# Set correct permissions
-chmod 600 /home/nkuser/.kube/config
-```
-
-### 2\. Make `kubectl` Config Permanent
-
-Add the `KUBECONFIG` environment variable to your shell's profile to automatically load the configuration file every time you log in.
-
-```bash
-echo 'export KUBECONFIG=$HOME/.kube/config' >> ~/.bashrc
-source ~/.bashrc
-```
-
-### 3\. Test the Setup
-
-Now you should be able to run `kubectl` commands without `sudo`.
-
-```bash
-kubectl get nodes
-```
-
-### 4\. Copy Kubeconfig to Your Local Machine
-
-For managing your cluster from your local machine, you'll need a copy of the config file.
-
-```bash
-scp nkuser@80.188.231.97:/home/nkuser/.kube/config ~/.kube/config
-```
-
------
-
-## 🛠️ Phase 4: Core Services for Your GitOps Pipeline
-
-This section installs the essential tools for a production-ready Kubernetes setup.
-
-### Nginx Ingress Controller
-
-While we'll use Istio for advanced routing, Nginx Ingress Controller is still useful for handling external traffic and is required by **cert-manager** for `http01` challenges.
-
-```bash
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.0/deploy/static/provider/cloud/deploy.yaml
-```
-
------
-
-### Helm
-
-Helm is a package manager for Kubernetes.
-
-```bash
-curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-```
-
------
-
-### Cert-Manager
-
-Cert-manager automates the management and issuance of TLS certificates from Let's Encrypt, securing all your services.
-
-1.  **Install Cert-Manager:**
-
-    ```bash
-    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
-    ```
-
-2.  **Verify the Installation:**
-
-    ```bash
-    kubectl get pods -n cert-manager
-    ```
-
-3.  **Install a Let's Encrypt `ClusterIssuer`:**
-
-    Create a file named `my-cluster-issuer.yaml` with the following content. Remember to replace the email address.
-
-    ```yaml
-    apiVersion: cert-manager.io/v1
-    kind: ClusterIssuer
-    metadata:
-      name: letsencrypt-prod
-    spec:
-      acme:
-        email: nknk4343@gmail.com
-        server: https://acme-v02.api.letsencrypt.org/directory
-        privateKeySecretRef:
-          name: letsencrypt-prod-private-key
-        solvers:
-        - http01:
-            ingress:
-              class: nginx
-    ```
-
-    Apply the file to your cluster:
-
-    ```bash
-    kubectl apply -f manifests/cert-manager/my-cluster-issuer.yaml
-    ```
-
------
-
-# 🚀 Phase 5: Install Istio with `istioctl`
-
-Istio provides a powerful service mesh for advanced routing, security, and observability.
-
-### The Best Istio Profile for this Scenario: `minimal`
-
-The `minimal` profile is the ideal choice for your use case. Here's why:
-
-  * **It only installs the core control plane components (`istiod`)**. This gives you all the core service mesh features like mTLS, traffic routing, telemetry, and security policies.
-  * **It explicitly *omits* the `istio-ingressgateway`**. This is exactly what you want, as you've already deployed and configured the NGINX Ingress Controller to handle your external traffic.
-  * **It's resource-efficient**. By not installing unnecessary components, you keep the resource footprint of Istio small, which is a good practice for a lightweight cluster like K3s.
-
-### How to Install Istio with the `minimal` Profile
-
-You should use `istioctl` for the installation, as it's the recommended tool for managing Istio and its profiles. It allows for easy customization.
-
-1.  **Download the Istio release and Install `istioctl`:**:
-
-    ```bash
-    curl -L https://istio.io/downloadIstio | sh -
-    cd istio-<VERSION>
-    export PATH=$PWD/bin:$PATH
-    ```
-    To make `istioctl` available permanently, add the export command to your `~/.bashrc` file:
-
-    ```bash
-    echo 'export PATH=$HOME/istio-*/bin:$PATH' >> ~/.bashrc
-    source ~/.bashrc
-    ```
-2.  **Run the `istioctl` command with the `minimal` profile and the K3s platform setting**:
-    K3s uses non-standard paths for CNI configuration, so you need to tell Istio to use the correct overrides. This is a crucial step for a smooth installation on K3s.
-
-    ```bash
-    istioctl install --set profile=minimal --set values.global.platform=k3s
-    ```
-
-    The `--set values.global.platform=k3s` flag ensures that Istio is installed with the necessary platform-specific configurations for K3s, preventing common CNI-related issues.
-
-3.  **Verify the Installation**:
-    After the installation, you can verify that `istiod` is running but the ingress gateway is not.
-
-    ```bash
-    kubectl get pods -n istio-system
-    ```
-
-    You should see the `istiod` pod in a `Running` state, but there should be no `istio-ingressgateway` pod.
-
-### Integrating with Your NGINX Ingress Controller
-
-Now that Istio is installed without its gateway, you need to configure your applications to work within the mesh.
-
-1.  **Label your namespaces for Istio injection**:
-    Istio works by injecting an Envoy sidecar proxy into your application pods. You need to enable this for the namespaces where your applications are running.
-
-    ```bash
-    kubectl label namespace <your-namespace> istio-injection=enabled --overwrite
-    ```
-
-    This label tells Istio to automatically inject the sidecar when new pods are created in that namespace.
-
-2.  **Restart your applications**:
-    To get the sidecar injected, you need to restart the deployments in the labeled namespace.
-
-    ```bash
-    kubectl rollout restart deployment -n <your-namespace>
-    ```
-
-    Once the pods restart, you'll see two containers in each pod (your application container and the Envoy sidecar).
-
-3.  **Traffic Flow**:
-    Your traffic will now flow as follows:
-
-      * External traffic arrives at your K3s cluster and is handled by the **NGINX Ingress Controller** (via the default Traefik service or a custom NGINX deployment).
-      * The NGINX Ingress Controller routes the traffic to the appropriate Kubernetes **Service** (e.g., `app-a-service`).
-      * The Envoy sidecar proxy, now running in your application pod, intercepts the traffic from the Service and applies Istio's policies (e.g., security, mTLS, observability, etc.) before it reaches your application container.
-
-This setup gives you the best of both worlds: a robust and well-understood NGINX Ingress for external traffic, and the full power of the Istio service mesh for managing and securing internal traffic between your microservices.
------
-
-## ⚙️ Phase 6: Deploy Your Core Applications with Helm
-
-This section covers deploying your key services using Helm charts.
-
-### **Argo CD**
-
-Deploy Argo CD, the heart of your GitOps workflow.
-
-1.  **Create the `argocd` namespace:**
-    ```bash
-    kubectl create namespace argocd
-    ```
-2.  **Apply `argocd-cert-manager.yaml`:**
-    This manifest will create a certificate for Argo CD's ingress.
-    ```bash
-    kubectl apply -f manifests/argo/argocd-cert-manager.yaml
-    ```
-3.  **Deploy Argo CD with Helm:**
-    This command installs Argo CD using your custom `values.yaml` file.
-    ```bash
-    helm install argocd argo/argo-cd -f values.yaml --namespace argocd
-    ```
-4.  **Retrieve the Initial Admin Password:**
-    ```bash
-    kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
-    ```
-
-### **Keycloak**
-
-Deploy Keycloak, an open-source identity and access management solution.
-
-1.  **Create the `keycloak` namespace:**
-    ```bash
-    kubectl create namespace keycloak
-    ```
-2.  **Apply `keycloak-cert-manager.yaml`:**
-    ```bash
-    kubectl apply -f manifests/keycloak/keycloak-cert-manager.yaml
-    ```
-3.  **Deploy Keycloak with Helm:**
-    ```bash
-    helm install keycloak-app oci://registry-1.docker.io/bitnamicharts/keycloak -f values.yaml -n keycloak
-    ```
-
------
-
-## 📦 Folder Structure
-
-To manage your GitOps repository, a clean folder structure is crucial.
-
-```bash
-k3s-gitops/
-├── argo/
-│   ├── root-app.yaml               # Argo CD's main ApplicationSet
-│   └── apps/                       # Contains all sub-applications
-│       ├── istio.yaml
-│       ├── cert-manager.yaml
-│       ├── keycloak.yaml
-│       └── ...
-├── manifests/                      # Manual Kubernetes manifests
-│   ├── istio/
-│   ├── cert-manager/
-│   └── ...
-├── charts/                         # Helm values for your applications
-└── README.md
-```
-
------
-
-## 🗺️ Domain Routing (`explorewithnk.com`)
-
-This table shows how your services are exposed via Istio Ingress Gateway, each with its own domain and a TLS certificate from Let's Encrypt.
-
-| App          | Subdomain                     |
-|--------------|-------------------------------|
-| Argo CD      | `argocd.explorewithnk.com`    |
-| Grafana      | `grafana.explorewithnk.com`   |
-| Prometheus   | `prometheus.explorewithnk.com`|
-| Loki         | `loki.explorewithnk.com`      |
-| Keycloak     | `auth.explorewithnk.com`      |
-| Vault        | `vault.explorewithnk.com`     |
-| Homepage     | `explorewithnk.com` |
-
-Once all your applications are set up, a single command can kick off the GitOps synchronization.
+Once Argo CD is online, activate continuous synchronization of all child applications using the root application:
 
 ```bash
 kubectl apply -f argo/root-app.yaml
 ```
 
-Argo CD will then take over and automatically sync the rest of your applications based on your Git repository.
+Argo CD syncs from `argo/apps/`:
+- `homepage`: Automatically reconciles `manifests/homepage` into namespace `default`
+- `keycloak-app`: Automatically reconciles `manifests/keycloak` into namespace `keycloak`
+- `argocd-ingress`: Automatically reconciles `manifests/argocd` into namespace `argocd`
 
------
-
-### Uninstall K3s
-
-If you ever need to completely remove your K3s installation, you can use the built-in uninstall script.
-
+Check synchronization status:
 ```bash
-sudo /usr/local/bin/k3s-uninstall.sh
+kubectl get applications -n argocd
 ```
+
+---
+
+## 🧹 Maintenance & Cleanup Guide
+
+When removing stacks (like Prometheus, Grafana, Loki, or Istio), Helm or manual manifest deletion often leaves behind headless services, CRDs, RBAC roles, and namespace ConfigMaps.
+
+### 1. Remove Leftover Istio ConfigMaps
+Istio automatically injected `istio-ca-root-cert` into every namespace during installation:
+```bash
+for ns in $(kubectl get ns -o jsonpath='{.items[*].metadata.name}'); do
+  kubectl delete cm istio-ca-root-cert -n "$ns" --ignore-not-found
+done
+```
+
+### 2. Remove Leftover Prometheus Headless Services (in `kube-system`)
+```bash
+kubectl delete svc -n kube-system \
+  observability-stack-kube-p-coredns \
+  observability-stack-kube-p-kube-controller-manager \
+  observability-stack-kube-p-kube-etcd \
+  observability-stack-kube-p-kube-proxy \
+  observability-stack-kube-p-kube-scheduler \
+  observability-stack-kube-p-kubelet \
+  --ignore-not-found
+```
+
+### 3. Remove Leftover Prometheus Operator CRDs (if monitoring is fully decommissioned)
+```bash
+kubectl delete crd \
+  alertmanagerconfigs.monitoring.coreos.com \
+  alertmanagers.monitoring.coreos.com \
+  podmonitors.monitoring.coreos.com \
+  probes.monitoring.coreos.com \
+  prometheusagents.monitoring.coreos.com \
+  prometheuses.monitoring.coreos.com \
+  prometheusrules.monitoring.coreos.com \
+  scrapeconfigs.monitoring.coreos.com \
+  servicemonitors.monitoring.coreos.com \
+  thanosrulers.monitoring.coreos.com \
+  --ignore-not-found
+```
+
+### 4. Remove Stale RBAC from Observability Stacks
+```bash
+kubectl delete clusterrole \
+  grafana-clusterrole \
+  loki-clusterrole \
+  loki-tiny-k3s-clusterrole \
+  observability-stack-kube-p-prometheus \
+  --ignore-not-found
+
+kubectl delete clusterrolebinding \
+  grafana-clusterrolebinding \
+  loki-clusterrolebinding \
+  loki-tiny-k3s-clusterrolebinding \
+  observability-stack-kube-p-prometheus \
+  --ignore-not-found
+```
+
+### 5. Remove Orphaned PVCs & Completed Admission Jobs
+```bash
+# Delete orphaned pending PVC in default namespace:
+kubectl delete pvc nk-log-pvc -n default --ignore-not-found
+
+# Delete completed admission pods from ingress-nginx (optional):
+kubectl delete pod -n ingress-nginx -l app.kubernetes.io/component=admission-webhook --field-selector=status.phase=Succeeded
+```
+
+---
+
+## 🔄 Useful Cluster Operations
+
+- **Node Status & Metrics**:
+  ```bash
+  kubectl get nodes -o wide
+  kubectl top nodes
+  kubectl top pods -A
+  ```
+
+- **Check Ingress & TLS Status**:
+  ```bash
+  kubectl get ingress -A
+  kubectl get certificates -A
+  ```
+
+- **Restart Deployment**:
+  ```bash
+  kubectl rollout restart deployment/homepage -n default
+  ```
+
+- **Uninstall K3s (Complete wipe)**:
+  ```bash
+  sudo /usr/local/bin/k3s-uninstall.sh
+  ```
