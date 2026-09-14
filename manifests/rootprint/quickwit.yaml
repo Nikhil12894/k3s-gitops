@@ -39,6 +39,8 @@ spec:
               value: "minio"
             - name: QW_S3_ENDPOINT
               value: "http://minio.default.svc.cluster.local:9000"
+            - name: QW_S3_FORCE_PATH_STYLE_ACCESS
+              value: "true"
             - name: AWS_REGION
               value: "us-east-1"
             - name: QW_DEFAULT_INDEX_ROOT_URI
