@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+data:
+  otel-collector-config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    exporters:
+      debug:
+        verbosity: detailed
+      otlphttp:
+        logs_endpoint: http://rootprint-ui.default.svc.cluster.local:8282/v1/logs
+        traces_endpoint: http://rootprint-ui.default.svc.cluster.local:8282/v1/traces
+        compression: gzip
+        encoding: proto
+        headers:
+          Authorization: "Bearer rp_32c5861a52a53de2cf262e4e7b0f3f069f02fd0d17fcf9c1"
+
+    processors:
+      transform:
+        log_statements:
+          - context: log
+            statements:
+              - 'merge_maps(attributes, ExtractPatterns(body, "^HTTP Request: (?P<http_request_method>\\w+) (?P<url_full>\\S+) \"(?P<network_protocol_version>[^\\s]+) (?P<http_response_status_code>\\d{3}) (?P<http_response_reason>[^\"]+)\""), "insert")'
+              - 'set(attributes["http.response.status_code"], Int(attributes["http_response_status_code"])) where attributes["http_response_status_code"] != nil'
+              - 'delete_key(attributes, "http_response_status_code")'
+
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          exporters: [otlphttp]
+        logs:
+          receivers: [otlp]
+          processors: [transform]
+          exporters: [otlphttp]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:latest
+          args: ["--config=/etc/otel-collector-config.yaml"]
+          env:
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=otel-collector"
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: collector-config-vol
+              mountPath: /etc/otel-collector-config.yaml
+              subPath: otel-collector-config.yaml
+      volumes:
+        - name: collector-config-vol
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  type: ClusterIP
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+  selector:
+    app: otel-collector

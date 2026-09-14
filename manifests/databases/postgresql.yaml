@@ -11,6 +11,10 @@ data:
     CREATE USER bn_keycloak1 WITH ENCRYPTED PASSWORD 'bn_keycloak1';
     GRANT ALL PRIVILEGES ON DATABASE bitnami_keycloak TO bn_keycloak1;
     ALTER DATABASE bitnami_keycloak OWNER TO bn_keycloak1;
+    CREATE DATABASE rootprint;
+    CREATE USER rootprint WITH ENCRYPTED PASSWORD 'rootprint';
+    GRANT ALL PRIVILEGES ON DATABASE rootprint TO rootprint;
+    ALTER DATABASE rootprint OWNER TO rootprint;
 ---
 apiVersion: v1
 kind: Secret
