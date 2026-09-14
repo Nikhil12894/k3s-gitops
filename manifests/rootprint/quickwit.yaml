@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quickwit
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quickwit
+  template:
+    metadata:
+      labels:
+        app: quickwit
+    spec:
+      containers:
+        - name: quickwit
+          image: quickwit/quickwit:latest
+          args: ["run"]
+          env:
+            - name: QW_S3_ENDPOINT
+              value: "http://minio.default.svc.cluster.local:9000"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: minio-creds
+                  key: root-user
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-creds
+                  key: root-password
+          ports:
+            - name: rest
+              containerPort: 7280
+            - name: grpc
+              containerPort: 7281
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1024Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: quickwit
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  type: ClusterIP
+  ports:
+    - name: rest
+      port: 7280
+      targetPort: 7280
+    - name: grpc
+      port: 7281
+      targetPort: 7281
+  selector:
+    app: quickwit
