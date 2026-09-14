@@ -6,6 +6,7 @@ metadata:
   namespace: default
   annotations:
     argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/ignore-health: "true"
 spec:
   refreshInterval: "1h"
   secretStoreRef:

@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: keycloak
+  name: keycloak-app
   namespace: keycloak
   annotations:
     argocd.argoproj.io/sync-wave: "1"
@@ -9,11 +9,11 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: keycloak
+      app: keycloak-app
   template:
     metadata:
       labels:
-        app: keycloak
+        app: keycloak-app
     spec:
       containers:
         - name: keycloak
@@ -68,7 +68,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: keycloak
+  name: keycloak-app
   namespace: keycloak
   annotations:
     argocd.argoproj.io/sync-wave: "1"
@@ -79,12 +79,12 @@ spec:
       port: 80
       targetPort: 8080
   selector:
-    app: keycloak
+    app: keycloak-app
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: keycloak-ingress
+  name: keycloak-app
   namespace: keycloak
   annotations:
     kubernetes.io/ingress.class: "nginx"
@@ -96,7 +96,7 @@ spec:
   tls:
     - hosts:
         - keycloak.explorewithnk.com
-      secretName: explorewithnk-keycloak-tls
+      secretName: keycloak.explorewithnk.com-tls
   rules:
     - host: keycloak.explorewithnk.com
       http:
@@ -105,6 +105,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: keycloak
+                name: keycloak-app
                 port:
                   number: 80
