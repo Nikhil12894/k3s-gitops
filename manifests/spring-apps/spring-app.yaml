@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: spring-app
-        image: ghcr.io/nikhil12894/spring-app:latest
+        image: ghcr.io/nikhil12894/spring-app-argo:latest
         imagePullPolicy: Always
         resources:
           requests:

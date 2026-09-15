@@ -47,5 +47,5 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ghcr.io/${{ env.REPO_OWNER_LC }}/spring-app:latest
-            ghcr.io/${{ env.REPO_OWNER_LC }}/spring-app:${{ github.sha }}
+            ghcr.io/${{ env.REPO_OWNER_LC }}/spring-app-argo:latest
+            ghcr.io/${{ env.REPO_OWNER_LC }}/spring-app-argo:${{ github.sha }}
