@@ -29,6 +29,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set lowercase repository owner
+        run: |
+          echo "REPO_OWNER_LC=${OWNER,,}" >> ${GITHUB_ENV}
+        env:
+          OWNER: '${{ github.repository_owner }}'
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -41,15 +47,15 @@ jobs:
 
       - name: Build and push Native Image
         if: "${{ github.event.inputs.build_type != 'jvm' }}"
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: apps/app-core
           file: apps/app-core/src/main/docker/Dockerfile.native-multistage
           platforms: linux/amd64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/app-core:latest
-            ghcr.io/${{ github.repository_owner }}/app-core:native-${{ github.sha }}
+            ghcr.io/${{ env.REPO_OWNER_LC }}/app-core:latest
+            ghcr.io/${{ env.REPO_OWNER_LC }}/app-core:native-${{ github.sha }}
 
       - name: Build and push JVM Image (if selected)
         if: "${{ github.event.inputs.build_type == 'jvm' }}"
@@ -57,5 +63,5 @@ jobs:
           cd apps/app-core
           chmod +x gradlew
           ./gradlew build -x test
-          docker build -f src/main/docker/Dockerfile.jvm -t ghcr.io/${{ github.repository_owner }}/app-core:latest .
-          docker push ghcr.io/${{ github.repository_owner }}/app-core:latest
+          docker build -f src/main/docker/Dockerfile.jvm -t ghcr.io/${{ env.REPO_OWNER_LC }}/app-core:latest .
+          docker push ghcr.io/${{ env.REPO_OWNER_LC }}/app-core:latest
