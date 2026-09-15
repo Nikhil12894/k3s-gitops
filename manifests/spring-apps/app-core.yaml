@@ -38,6 +38,8 @@ spec:
     metadata:
       labels:
         app: app-core
+      annotations:
+        instrumentation.opentelemetry.io/inject-java: "true"
     spec:
       containers:
         - name: app-core

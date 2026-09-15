@@ -26,8 +26,8 @@ flowchart TD
 | **Wave -1** | `01-secrets-backend.yaml`<br>`02-minio.yaml` | Vaultwarden, ClusterSecretStore, MinIO S3 | Password management backend & local S3 object storage |
 | **Wave 0** | `03-databases.yaml` | PostgreSQL 16, Valkey 8, Apache Kafka (KRaft) + Kafka UI | Consolidated DB, in-memory cache/store, and distributed event log |
 | **Wave 1** | `04-keycloak.yaml` | Keycloak 26 (wired to consolidated PostgreSQL) | Centralized SSO and OIDC identity provider |
-| **Wave 2** | `05-spring-apps.yaml` | Spring Boot apps (`app-core`), HPA, ExternalSecret | JVM microservices with Valkey caching, Kafka streaming, and HPA |
-| **Wave 3** | `06-rootprint.yaml`<br>`07-backups.yaml`<br>`08-homepage.yaml` | Rootprint UI, Quickwit, OTel Collector, Backup CronJob, Homepage | Distributed logging & tracing, automated daily S3 dumps, landing page |
+| **Wave 2** | `05-spring-apps.yaml`<br>`10-otel-operator.yaml` | Spring Boot apps (`app-core`), HPA, OpenTelemetry Operator | JVM microservices with Valkey caching, Kafka streaming, and OTel auto-instrumentation |
+| **Wave 3** | `06-rootprint.yaml`<br>`07-backups.yaml`<br>`08-homepage.yaml`<br>`09-monitoring.yaml` | Rootprint UI, Quickwit, OTel Collector, Backup CronJob, Homepage, Prometheus & Grafana | Distributed logging & tracing, automated daily S3 dumps, landing page, cluster metrics & Grafana |
 
 ---
 
@@ -112,6 +112,7 @@ All public HTTP/HTTPS traffic is handled by **NGINX Ingress Controller** with au
 | **MinIO Console**| [`minio.explorewithnk.com`](https://minio.explorewithnk.com) | `default` | `minio:9001` | `nginx` | `explorewithnk-minio-tls` |
 | **Kafka UI** | [`kafka.explorewithnk.com`](https://kafka.explorewithnk.com) | `default` | `kafka-ui:80` | `nginx` | `explorewithnk-kafka-tls` |
 | **Rootprint UI** | [`rootprint.explorewithnk.com`](https://rootprint.explorewithnk.com)| `default` | `rootprint-ui:80` | `nginx` | `explorewithnk-rootprint-tls` |
+| **Grafana** | [`grafana.explorewithnk.com`](https://grafana.explorewithnk.com)| `monitoring` | `cluster-monitoring-grafana:80` | `nginx` | `explorewithnk-grafana-tls` |
 
 ---
 
@@ -131,6 +132,8 @@ k3s-gitops/
 │       ├── 06-rootprint.yaml            # Wave  3: Rootprint + Quickwit + OTel Observability
 │       ├── 07-backups.yaml              # Wave  3: Automated S3/MinIO Backup CronJobs
 │       ├── 08-homepage.yaml             # Wave  3: Landing Page Application
+│       ├── 09-monitoring.yaml           # Wave  3: Prometheus + Grafana Observability
+│       ├── 10-otel-operator.yaml        # Wave  2: OpenTelemetry Operator & Auto-Instrumentation
 │       └── argocd.yaml                  # Wave -2: Argo CD Ingress & TLS
 ├── bootstrap/
 │   └── install/
@@ -152,14 +155,17 @@ k3s-gitops/
     │   ├── postgresql.yaml              # PostgreSQL 16 StatefulSet + Multi-DB Init
     │   ├── valkey.yaml                  # Valkey 8 Deployment + Service + PVC
     │   └── kafka.yaml                   # Apache Kafka KRaft StatefulSet + Kafka UI
-    ├── keycloak/                        # Keycloak TLS & Certificate
+    ├── keycloak/                        # Keycloak IAM Declarative Manifests
+    │   ├── keycloak.yaml
+    │   ├── servicemonitor.yaml
     │   └── keycloak-cert-manager.yaml
     ├── spring-apps/                     # Microservices with HPA, Valkey & Kafka
     │   └── app-core.yaml
     ├── rootprint/                       # Observability stack
     │   ├── quickwit.yaml                # Quickwit v0.9.0 with MinIO S3 backend
     │   ├── rootprint-ui.yaml            # Rootprint Core & UI
-    │   └── otel-collector.yaml          # OpenTelemetry Collector Contrib
+    │   ├── otel-collector.yaml          # OpenTelemetry Collector Contrib
+    │   └── instrumentation.yaml         # OpenTelemetry Auto-Instrumentation CR
     ├── backups/                         # Automated CronJob pg_dumpall -> MinIO S3
     │   └── cronjob-postgres-backup.yaml
     ├── homepage/                        # Landing page manifests

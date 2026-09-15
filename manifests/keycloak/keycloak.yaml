@@ -103,7 +103,9 @@ data:
   KEYCLOAK_HOSTNAME: |-
     https://keycloak.explorewithnk.com/
   KEYCLOAK_HOSTNAME_STRICT: "false"
-  KEYCLOAK_ENABLE_STATISTICS: "false"
+  KEYCLOAK_ENABLE_STATISTICS: "true"
+  KC_METRICS_ENABLED: "true"
+  KC_LEGACY_OBSERVABILITY_INTERFACE: "true"
   KEYCLOAK_DATABASE_HOST: "postgresql.default.svc.cluster.local"
   KEYCLOAK_DATABASE_PORT: "5432"
   KEYCLOAK_DATABASE_NAME: "bitnami_keycloak"
