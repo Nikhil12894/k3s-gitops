@@ -24,7 +24,7 @@ data:
         compression: gzip
         encoding: proto
         headers:
-          Authorization: "Bearer rp_32c5861a52a53de2cf262e4e7b0f3f069f02fd0d17fcf9c1"
+          Authorization: "Bearer rp_b74b9b67eb827f0765485d65aaceb7fc3238022e1b563d0d"
 
     processors:
       transform:
@@ -63,32 +63,32 @@ spec:
         app: otel-collector
     spec:
       containers:
-        - name: otel-collector
-          image: otel/opentelemetry-collector-contrib:latest
-          args: ["--config=/etc/otel-collector-config.yaml"]
-          env:
-            - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "service.name=otel-collector"
-          ports:
-            - name: otlp-grpc
-              containerPort: 4317
-            - name: otlp-http
-              containerPort: 4318
-          resources:
-            requests:
-              cpu: "50m"
-              memory: "64Mi"
-            limits:
-              cpu: "500m"
-              memory: "256Mi"
-          volumeMounts:
-            - name: collector-config-vol
-              mountPath: /etc/otel-collector-config.yaml
-              subPath: otel-collector-config.yaml
-      volumes:
+      - name: otel-collector
+        image: otel/opentelemetry-collector-contrib:latest
+        args: [ "--config=/etc/otel-collector-config.yaml" ]
+        env:
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=otel-collector"
+        ports:
+        - name: otlp-grpc
+          containerPort: 4317
+        - name: otlp-http
+          containerPort: 4318
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        volumeMounts:
         - name: collector-config-vol
-          configMap:
-            name: otel-collector-config
+          mountPath: /etc/otel-collector-config.yaml
+          subPath: otel-collector-config.yaml
+      volumes:
+      - name: collector-config-vol
+        configMap:
+          name: otel-collector-config
 ---
 apiVersion: v1
 kind: Service
@@ -100,11 +100,11 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - name: otlp-grpc
-      port: 4317
-      targetPort: 4317
-    - name: otlp-http
-      port: 4318
-      targetPort: 4318
+  - name: otlp-grpc
+    port: 4317
+    targetPort: 4317
+  - name: otlp-http
+    port: 4318
+    targetPort: 4318
   selector:
     app: otel-collector
