@@ -1,5 +1,5 @@
-## Stage 1: Build the native binary using Mandrel / GraalVM builder image
-FROM quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-21 AS build
+## Stage 1: Build the native binary using Mandrel / GraalVM builder image (JDK 25)
+FROM quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25 AS build
 USER quarkus
 WORKDIR /code
 COPY --chown=quarkus:quarkus gradlew /code/gradlew
@@ -8,7 +8,7 @@ COPY --chown=quarkus:quarkus build.gradle /code/
 COPY --chown=quarkus:quarkus settings.gradle /code/
 COPY --chown=quarkus:quarkus gradle.properties /code/
 COPY --chown=quarkus:quarkus src /code/src
-RUN ./gradlew build -Dquarkus.native.enabled=true -x test --no-daemon
+RUN ./gradlew build -Dquarkus.package.type=native -x test --no-daemon
 
 ## Stage 2: Create minimal runner container
 FROM quay.io/quarkus/ubi9-quarkus-micro-image:2.0
