@@ -45,7 +45,7 @@ spec:
       containers:
       - name: app-core
         image: ghcr.io/nikhil12894/app-core:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         resources:
           requests:
             cpu: "50m"
