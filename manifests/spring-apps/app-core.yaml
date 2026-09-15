@@ -30,7 +30,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "2"
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: app-core
@@ -39,7 +39,7 @@ spec:
       labels:
         app: app-core
       annotations:
-        instrumentation.opentelemetry.io/inject-java: "true"
+        instrumentation.opentelemetry.io/inject-java: "false"
     spec:
       containers:
       - name: app-core
@@ -72,6 +72,8 @@ spec:
           value: "app-core"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: "http://otel-collector.default.svc.cluster.local:4317"
+        - name: OTEL_PROPAGATORS
+          value: "tracecontext,baggage"
         ports:
         - name: http
           containerPort: 8080
@@ -101,8 +103,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: app-core
-  minReplicas: 2
-  maxReplicas: 6
+  minReplicas: 1
+  maxReplicas: 1
   metrics:
   - type: Resource
     resource:

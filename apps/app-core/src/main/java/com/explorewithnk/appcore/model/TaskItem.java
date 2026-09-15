@@ -9,10 +9,12 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import java.time.Instant;
 
 @Entity
 @Table(name = "tasks")
+@RegisterForReflection
 public class TaskItem extends PanacheEntityBase {
 
     @Id

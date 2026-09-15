@@ -1,7 +1,9 @@
 package com.explorewithnk.appcore.model;
 
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import java.util.Map;
 
+@RegisterForReflection
 public class ClusterInfo {
 
     public String appName;

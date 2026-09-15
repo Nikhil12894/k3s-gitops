@@ -1,8 +1,10 @@
 package com.explorewithnk.appcore.model;
 
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import java.time.Instant;
 import java.util.UUID;
 
+@RegisterForReflection
 public class TaskEvent {
 
     public String eventId;
