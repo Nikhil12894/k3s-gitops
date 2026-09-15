@@ -1,0 +1,61 @@
+name: Build and Push App Core
+
+on:
+  push:
+    paths:
+      - 'apps/app-core/**'
+      - '.github/workflows/build-app-core.yaml'
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build Type (native or jvm)'
+        required: true
+        default: 'native'
+        type: choice
+        options:
+          - native
+          - jvm
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Native Image
+        if: "${{ github.event.inputs.build_type != 'jvm' }}"
+        uses: docker/build-push-action@v5
+        with:
+          context: apps/app-core
+          file: apps/app-core/src/main/docker/Dockerfile.native-multistage
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/app-core:latest
+            ghcr.io/${{ github.repository_owner }}/app-core:native-${{ github.sha }}
+
+      - name: Build and push JVM Image (if selected)
+        if: "${{ github.event.inputs.build_type == 'jvm' }}"
+        run: |
+          cd apps/app-core
+          chmod +x gradlew
+          ./gradlew build -x test
+          docker build -f src/main/docker/Dockerfile.jvm -t ghcr.io/${{ github.repository_owner }}/app-core:latest .
+          docker push ghcr.io/${{ github.repository_owner }}/app-core:latest

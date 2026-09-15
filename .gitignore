@@ -11,3 +11,12 @@
 
 charts/grafana
 charts/addons
+
+# Java, Gradle & Quarkus
+.gradle/
+build/
+bin/
+out/
+.quarkus/
+*.class
+*.log

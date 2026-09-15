@@ -16,12 +16,12 @@ spec:
     name: app-db-secrets
     creationPolicy: Owner
   data:
-    - secretKey: POSTGRES_PASSWORD
-      remoteRef:
-        key: "app-core"
-        property: "db_password"
+  - secretKey: POSTGRES_PASSWORD
+    remoteRef:
+      key: "app-core"
+      property: "db_password"
 ---
-# 2. Deploy the Spring Boot app with JVM container settings, Valkey, Kafka, and readiness checks
+# 2. Deploy the Quarkus Native app with Valkey, Kafka, Keycloak, OTel, and readiness checks
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -42,45 +42,51 @@ spec:
         instrumentation.opentelemetry.io/inject-java: "true"
     spec:
       containers:
-        - name: app-core
-          image: ghcr.io/nikhil12894/app-core:latest
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "384Mi"
-            limits:
-              cpu: "1000m"
-              memory: "768Mi"
-          env:
-            - name: SPRING_DATASOURCE_URL
-              value: "jdbc:postgresql://postgresql.default.svc.cluster.local:5432/app_db"
-            - name: SPRING_DATASOURCE_USERNAME
-              value: "postgres"
-            - name: SPRING_DATASOURCE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: app-db-secrets
-                  key: POSTGRES_PASSWORD
-            - name: SPRING_DATA_REDIS_HOST
-              value: "valkey.default.svc.cluster.local"
-            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-              value: "kafka.default.svc.cluster.local:9092"
-            - name: JAVA_TOOL_OPTIONS
-              value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
-          ports:
-            - containerPort: 8080
-          readinessProbe:
-            httpGet:
-              path: /actuator/health/readiness
-              port: 8080
-            initialDelaySeconds: 20
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /actuator/health/liveness
-              port: 8080
-            initialDelaySeconds: 30
-            periodSeconds: 15
+      - name: app-core
+        image: ghcr.io/nikhil12894/app-core:latest
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+        env:
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgresql.default.svc.cluster.local:5432/app_db"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "postgres"
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-db-secrets
+              key: POSTGRES_PASSWORD
+        - name: SPRING_DATA_REDIS_HOST
+          value: "valkey.default.svc.cluster.local"
+        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka.default.svc.cluster.local:9092"
+        - name: KEYCLOAK_AUTH_SERVER_URL
+          value: "http://keycloak-app.keycloak.svc.cluster.local:8080/realms/master"
+        - name: KEYCLOAK_CLIENT_ID
+          value: "app-core"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://otel-collector.default.svc.cluster.local:4317"
+        ports:
+        - name: http
+          containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /q/health/ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /q/health/live
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 15
 ---
 # 3. Horizontal Pod Autoscaler for high load handling
 apiVersion: autoscaling/v2
@@ -98,25 +104,76 @@ spec:
   minReplicas: 2
   maxReplicas: 6
   metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 75
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
 ---
-# 4. Service (ClusterIP only - internal)
+# 4. Service exposing port 8080
 apiVersion: v1
 kind: Service
 metadata:
   name: app-core
   namespace: default
+  labels:
+    app: app-core
   annotations:
     argocd.argoproj.io/sync-wave: "2"
 spec:
   type: ClusterIP
   ports:
-    - port: 8080
-      targetPort: 8080
+  - name: http
+    port: 8080
+    targetPort: 8080
   selector:
     app: app-core
+---
+# 5. ServiceMonitor for Prometheus Operator scraping /q/metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: app-core-monitor
+  namespace: default
+  labels:
+    app: app-core
+    release: cluster-monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  selector:
+    matchLabels:
+      app: app-core
+  endpoints:
+  - port: http
+    path: /q/metrics
+    interval: 15s
+    scrapeTimeout: 10s
+---
+# 6. Ingress with TLS via cert-manager
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-core-ingress
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  tls:
+  - hosts:
+    - app.explorewithnk.com
+    secretName: app-core-tls
+  rules:
+  - host: app.explorewithnk.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-core
+            port:
+              number: 8080
