@@ -73,8 +73,12 @@ spec:
           value: "app-core"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: "http://otel-collector.default.svc.cluster.local:4317"
-        - name: OTEL_PROPAGATORS
-          value: "tracecontext,baggage"
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: grpc
+        - name: OTEL_TRACES_EXPORTER
+          value: otlp
+        - name: OTEL_LOGS_EXPORTER
+          value: otlp
         ports:
         - name: http
           containerPort: 8080
