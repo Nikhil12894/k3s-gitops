@@ -26,7 +26,7 @@ spec:
                   DUMP_FILE="/tmp/postgres_backup_${TIMESTAMP}.sql.gz"
 
                   echo "Installing postgresql client..."
-                  yum install -y postgresql gzip
+                  dnf install -y postgresql16 gzip || dnf install -y postgresql15 gzip
 
                   echo "Dumping PostgreSQL databases..."
                   PGPASSWORD="$POSTGRES_PASSWORD" pg_dumpall -h postgresql.default.svc.cluster.local -U postgres | gzip > "$DUMP_FILE"
