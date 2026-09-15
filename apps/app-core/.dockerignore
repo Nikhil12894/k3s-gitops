@@ -1,5 +1,7 @@
-*
-!build/*-runner
-!build/*-runner.jar
-!build/lib/*
-!build/quarkus-app/*
+.gradle/
+build/
+target/
+*.log
+.idea/
+.vscode/
+.DS_Store
