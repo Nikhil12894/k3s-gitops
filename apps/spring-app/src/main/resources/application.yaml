@@ -1,0 +1,69 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: spring-app
+
+  # PostgreSQL Datasource
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgresql.default.svc.cluster.local:5432/app_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgrespassword123}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Valkey / Redis Configuration
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:valkey.default.svc.cluster.local}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      timeout: 2000
+
+  # Apache Kafka Configuration
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:kafka.default.svc.cluster.local:9092}
+    consumer:
+      group-id: spring-app-consumer-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+  # Keycloak OpenID Connect (OAuth2 Resource Server)
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_AUTH_SERVER_URL:http://keycloak-app.keycloak.svc.cluster.local:8080/realms/master}
+
+# Actuator & Prometheus Metrics
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      access: unrestricted
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.explorewithnk.springapp: INFO
