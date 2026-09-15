@@ -1,26 +1,27 @@
 # 1. Pull the password dynamically from Vaultwarden into a native K8s secret
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: app-db-secret-sync
-  namespace: default
-  annotations:
-    argocd.argoproj.io/sync-wave: "2"
-    argocd.argoproj.io/ignore-health: "true"
-spec:
-  refreshInterval: "1h"
-  secretStoreRef:
-    name: bitwarden-backend
-    kind: ClusterSecretStore
-  target:
-    name: app-db-secrets
-    creationPolicy: Owner
-  data:
-  - secretKey: POSTGRES_PASSWORD
-    remoteRef:
-      key: "app-core"
-      property: "db_password"
----
+# (Uncomment once ClusterSecretStore/bitwarden-backend is activated with Vaultwarden API token)
+# apiVersion: external-secrets.io/v1beta1
+# kind: ExternalSecret
+# metadata:
+#   name: app-db-secret-sync
+#   namespace: default
+#   annotations:
+#     argocd.argoproj.io/sync-wave: "2"
+#     argocd.argoproj.io/ignore-health: "true"
+# spec:
+#   refreshInterval: "1h"
+#   secretStoreRef:
+#     name: bitwarden-backend
+#     kind: ClusterSecretStore
+#   target:
+#     name: app-db-secrets
+#     creationPolicy: Owner
+#   data:
+#     - secretKey: POSTGRES_PASSWORD
+#       remoteRef:
+#         key: "app-core"
+#         property: "db_password"
+# ---
 # 2. Deploy the Quarkus Native app with Valkey, Kafka, Keycloak, OTel, and readiness checks
 apiVersion: apps/v1
 kind: Deployment
